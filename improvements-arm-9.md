@@ -186,16 +186,17 @@ If only the category name is given make the following assumptions:
   common which is always 'true')
 * the path is datadir/category/value
 * datadir defaults to 'data'
+* if a string is given instead of an object, it is the category name
 
 i.e. which makes it enough to specify:
 
     ---
     version: 3
     hierarchy:
-        - category: 'environment'
-        - category: 'operatingsystem'
-        - category: 'osfamily'
-        - category: 'common'
+        - 'environment'
+        - 'operatingsystem'
+        - 'osfamily'
+        - 'common'
         
 Since the rest can be derived.
 
