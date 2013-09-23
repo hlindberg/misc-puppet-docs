@@ -371,18 +371,23 @@ class ntp inherits ntp::params {
 ### Summary
 
 As you could see in this progression from hard-coded data to implicitly bound parameters using
-Hiera-1 as the mechanism there s simply not just the distinction of "code" vs. "data" - we are actually dealing with multiple concerns that we like to keep separate:
+Hiera-1 as the mechanism there is simply not just the distinction of "code" vs. "data" - we are actually dealing with multiple concerns that we like to keep separate:
 
 * The code should be easy to read and understand
 * We need to compose data from several sources (the site level configuration, and modules)
-* We want modules to be easily dropped into a configuration
+* We want modules to be easily dropped into a site/environment configuration
+   * we do not want to be required to manually edit files at the site/environment
+     level as we add/remove modules
+   * we may have dynamic environments which are pretty much impossible to support if constant
+     change is required at the site/environment level.
 * Modules should not step on each other
 
 What we have just seen is:
 
 * Use of Hiera-1 makes a clean separation of data and code
 * The centralized nature of Hiera-1 gives us new issues we end up with a plethora of hierarchical
-  levels and flea market of small data files.
+  levels and flea market of small data files since we need to solve the issues of every module
+  in one place.
 * We must manually maintain this structure as modules change.
 * We must manually maintain this structure as we add or remove modules
 
@@ -405,6 +410,10 @@ found in [ARM-9 Data-in-modules](http://links.puppetlabs.com/arm9-data_in_module
 
 You can safely skip reading the armature text at this point. The questions about what armatures is, the relationship between ARM-9 and ARM-8 (the ideas ARM-9 is based on), and the rationale for the implementation, are answered in the [FAQ](#FAQ) at the end of this document.
 
+Please note that the first implementation is experimental - the purpose is to get early feedback.
+A number of issues have already been raised and solutions have been described. These issues
+are noted in this document.
+
 ### Main Features
 
 In short, Data in Modules does the following:
@@ -417,6 +426,12 @@ In short, Data in Modules does the following:
 * You are given control over how the data from modules is composed and arranged in relation to
   other sources e.g. site level data overrides module level data.
 * Data bindings can be expressed in Hiera-2, or in Ruby.
+* A module (and the site/environment) may have multiple sets of data to allow a configuration
+  to select the suitable data sets. This an be used for several purposes; allowing modules to
+  supply defaults for different common configuration types, allow a module to be created for the sole 
+  purpose of contributing different kinds of configuration for a combination of modules (i.e. a kind 
+  of higher order module like a "lamp-stack" which in itself does not contain much functionality but 
+  it may configure the modules it depends on)
 
 ### Hiera-2 Features
 
@@ -424,12 +439,15 @@ There are two major differences between Hiera-1 and Hiera-2
 
 * Hiera-2 uses Puppet Language syntax for interpolation of expressions - i.e. `${expression}`, where
   Hiera-1 only supported interpolation of variables, and with a different syntax `%{varname}`.
-* The `hiera.yaml` configuration file has changed, variables are interpolated using Puppet Language
-  syntax, (and a few other details).
+* The `hiera.yaml` configuration file has changed
+    * variables are interpolated using Puppet Language syntax
+    * since the result is contributed to an overall configuration of data, there is the need
+      to specify how.
 
 Introducing data-in-modules presented an opportunity to also address general issues. Hiera-1 only allows interpolate of variables and uses a different interpolation syntax (`%{varname}`) than the Puppet Language (`${expression}`).
-In Hiera-2 any interpolate able expression can be used, including function calls, and the swing
-is treaded like a Puppet Language double quoted string, which means that escaping special characters is also possible.
+
+In Hiera-2 any interpolateable Puppet expression can be used, including function calls. The string
+is treated like a Puppet Language double quoted string, which means that escaping special characters is also possible.
 
 The other notable change is to the `hiera.yaml` required to make it possible to compose/aggregate multiple hierarchies.
 
@@ -496,6 +514,13 @@ By looking at the file we see three things:
   slightly more elaborate structure where each entry in the hierarchy have three values (instead of  
   Hiera-1's one path value). This is explained below.
 * The paths work the same way as in Hiera-1, but use Puppet Language interpolation.
+
+*Note that people have raised issues about what seems like redundant information, and
+that the three elements have no attribute names associated with them which makes it
+hard to guess what the meaning is. There is a proposal that reduce the amount of text
+that needs to be entered to a minimum. At the moment, the experimental implementation requires the
+somewhat elaborate specification as shown in this document.*
+
 
 ### Why the three data elements?
 
@@ -583,9 +608,12 @@ As shown earlier, there are two schools; using implicit or explicit setting of p
 As you have already seen, with the implicit style, you do not have to change the logic as long as
 the bound keys (names) correspond to the names of the parameters in the puppet logic. They are just magically set. (Well not so magic - you have already seen where the rabbits come from).
 
+There really is not much more to say. It works as earlier, only now with data contributed from
+a module.
+
 #### Explicit Style
 
-In the explicit style however (shown below) we will now make use of the Puppet Bindings systems
+In the explicit style (shown below) we will now make use of the Puppet Bindings systems
 `lookup` function which in addition to producing the value, also can assert the data type. (If you remember, we earlier had calls to the `validate_string` method to do this).
 
 We can now wire the data like this:
@@ -684,23 +712,22 @@ this file, but do not specify the sections for layers, or categories, we get the
   * The *category-value* - this determines what the category value will be set to when processing a 
     request.
 
-#### How it works
+*Note that people have raised issues about the format not being human friendly and
+that named attributes should be used to a greater extend. There is a propoal how this
+should be done. At the moment, the experimental implementation requires the somewhat elaborate specification as shown in this document.*
 
-A request is made for a catalog, all facts are turned into variables. The `binder_config.yaml` is read, the category values are evaluated. We end up with something like this :
-
-    node            = 'kermit.example.com'
-    osfamily        = 'Linux'
-    operatingsystem = 'Gentoo'
-
-The layering specification is then processed to produce the set of relevant bindings given the 
-just computed values. It goes through the URIs to `include` and asks an implementation per type
-of URI to give it a list of loadable items (e.g. the URI `'module-hiera:/*'` tells the system to look in the root of every module for data and give back a list of modules that contain data), the URIs listed in `exclude` undergo the same treatment and if an excluded URI is found among the included URIs it is removed - thus skipping that contribution.
-
-There are several schemes that allows loading hiera-2 data, or data specified using the Puppet Bindings Ruby support. It is also possible to add custom schemes.
 
 Schemes
 -------
-This section explains in more detail how the schemes work. The more advanced aspects are discussed in  [ARM-9](TODO://URL)
+We need a way to refer to different sources of bindings. In this document we concentrate on
+data in modules where the data is expressed using Hiera-2, but there will be other sources
+such as external services (e.g. ENC) that can be directly integrated. We also want an identity of a
+set of contributed data that continutes to work when sources are something other than modules.
+We could add support for file and ftp schemes that read serialized bindings models (which could be useful when testing, or as optimization / caching).
+
+For these reasons, a decision was made to use a URI (Universal Resource Identifier). While you are not familar with the schemes used by the binder, the fundamental idea of a URI, its syntax, and the basic laws of URIs should be familiar to everyone.
+
+This section explains in more detail how the binder schemes work. The more advanced aspects are discussed in  [ARM-9](TODO://URL)
 
 The bindings provider URI is specific to the used scheme. In the first implementation there are four such schemes:
 
@@ -708,6 +735,9 @@ The bindings provider URI is specific to the used scheme. In the first implement
 - `module-hiera`
 - `confdir`
 - `module`
+
+It is possible to add custom schemes.
+
 
 ### Hiera-2 Schemes
 
@@ -745,6 +775,11 @@ ignored if the URI can not be resolved. The optionality is expressed using a URI
 if the module ‘`devdata`’ is present its contributions should be used, otherwise ignored, is expressed as
 `module-hiera:/devdata?optional`.
 
+This can be used to minimize the amount of change to the binder_config.yaml and allowing the
+configuration to be dynamically changed depending on what is on the module path. As an example
+a developer can check out a devbranch with experimental overrides without having to restart the master. 
+
+
 Applying what we Learned
 -----
 
@@ -770,27 +805,16 @@ The reason all used categories must be in this list is that all data from all mo
 
 Issues With current implementation
 ===
-### Handling of default values
+Since data-in-modules where made availabel as an experimental implementation in Puppet 3.3 people
+have been asking questions, describing their needs and given critique. 
 
-T.B.D
-
-### Private Module Data
-
-T.B.D
-
-### Adding additional categories to the dealt
-
-The default should perhaps contain the category `operatingsystem`, and a few other
-typically used categories in modules. This to standardize what otherwise could be a configuration
-hassle for users integrating modules from the forge.
-
-### More human friendly format
-
-T.B.D
-
-### Looking up First Found
-
-T.B.D
+* The files are not human friendly - use attributes
+* There is much redundancy in the typical case
+* Modules need to be able to have their own hierarchy to be both self contained and configurable
+* The lookup function needs to handle defaults (and have some additional features like 'first-found' 
+  given a list of keys)
+ 
+This is described, along with proposed solutions in an adjoining document called 'improvements-arm-9.md' (This [link](improvements-arm-9.md) may work depending on where/how you consume this document)
  
 FAQ
 ===
