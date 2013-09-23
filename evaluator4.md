@@ -207,21 +207,21 @@ Match Operators
 
   - a literal regular expression.
 
-    $x =~ /Unit .* the end/
+        $x =~ /Unit .* the end/
 
   - a regular expression created via the Pattern type.
-  
-    $x =~ Pattern['Until .* the end']
+
+        $x =~ Pattern['Until .* the end']
 
   - a regular expression created from a String or bare word, e.g 
 
-    $x =~ "Until .* the end"
-    $x =~ sodium
+        $x =~ "Until .* the end"
+        $x =~ sodium
 
   - any expression evaluating to a regular expression
-  
-    $y = Pattern['Until .* the end']
-    $x =~ $y
+
+        $y = Pattern['Until .* the end']
+        $x =~ $y
         
 * The result is always a `Boolean`
 * As a side effect, the match variables `$0`-`$n` are set in the current scope
