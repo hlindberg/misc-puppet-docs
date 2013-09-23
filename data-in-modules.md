@@ -443,6 +443,8 @@ There are two major differences between Hiera-1 and Hiera-2
     * variables are interpolated using Puppet Language syntax
     * since the result is contributed to an overall configuration of data, there is the need
       to specify how.
+* Hiera-2 loads dynamically, if the hiera.yaml is changed these changes are picked up when processing
+  the next request (e.g. for a catalog).
 
 Introducing data-in-modules presented an opportunity to also address general issues. Hiera-1 only allows interpolate of variables and uses a different interpolation syntax (`%{varname}`) than the Puppet Language (`${expression}`).
 
@@ -515,7 +517,7 @@ By looking at the file we see three things:
   Hiera-1's one path value). This is explained below.
 * The paths work the same way as in Hiera-1, but use Puppet Language interpolation.
 
-*Note that people have raised issues about what seems like redundant information, and
+*Note that feedback have been received  about what seems like redundant information, and
 that the three elements have no attribute names associated with them which makes it
 hard to guess what the meaning is. There is a proposal that reduce the amount of text
 that needs to be entered to a minimum. At the moment, the experimental implementation requires the
@@ -614,7 +616,7 @@ a module.
 #### Explicit Style
 
 In the explicit style (shown below) we will now make use of the Puppet Bindings systems
-`lookup` function which in addition to producing the value, also can assert the data type. (If you remember, we earlier had calls to the `validate_string` method to do this).
+`lookup` function which in addition to producing the value, also can assert the data type (i.e. check and fail if data is not of the given type). (If you remember, we earlier had calls to the `validate_string` method to do this, and now we do not need these separate calls to check the data type).
 
 We can now wire the data like this:
 
@@ -715,6 +717,20 @@ this file, but do not specify the sections for layers, or categories, we get the
 *Note that people have raised issues about the format not being human friendly and
 that named attributes should be used to a greater extend. There is a propoal how this
 should be done. At the moment, the experimental implementation requires the somewhat elaborate specification as shown in this document.*
+
+#### When do I have to change the binder_config?
+
+The default town in the previous section should give you quite a lot of milage. It picks up all contributions from modules written using Hiera-2 and it picks up all contributions written in Ruby.
+It defines that the site level data should override anything that comes from modules. It also has a default set of categories.
+
+This is enough to start experimenting. You need to change this file:
+
+* to define additional layers (maybe you want in-house modules to be able to override public/forge 
+  modules).
+* if you want to manually list modules and not rely on wild cards (maybe you want things locked down
+  in production)
+* if you want to add categories
+* if you want to integrate data from other sources (adding a custom scheme)
 
 
 Schemes
