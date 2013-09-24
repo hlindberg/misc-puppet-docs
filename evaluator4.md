@@ -1,6 +1,6 @@
 Evaluator4
 ==========
-This describes the "future evaluator" (Evaluator4).
+This describes the "future evaluator" (Evaluator4) work in progress.
 
 Literals
 ---------
