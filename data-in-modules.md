@@ -821,7 +821,7 @@ The reason all used categories must be in this list is that all data from all mo
 
 Issues With current implementation
 ===
-Since data-in-modules where made availabel as an experimental implementation in Puppet 3.3 people
+Since data-in-modules where made available as an experimental implementation in Puppet 3.3 people
 have been asking questions, describing their needs and given critique. 
 
 * The files are not human friendly - use attributes
@@ -842,6 +842,11 @@ No, only top scope variables set from facts and settings are available for inter
 
 No, data is bound to keys that are in a flat namespace. All names should be fully qualified with module name to ensure that they do not clash. As a module author you own the module's namespace.
 
+This is an area of future improvement. It would be great if a module could declare that
+it only assigns data to keys in its own namespace, or to keys that exist for the purpose of
+collecting information from other contributors. That way the system can enforce these rules. For modules that contain configuration for others, the user integrating such a module would need
+to know what it does (or trust it because it is internal to the organization).
+
 ### Can I interpolate the values of other keys?
 
 Yes, you can call the lookup function in interpolation.
@@ -851,12 +856,16 @@ Yes, you can call the lookup function in interpolation.
 Yes, the Puppet Binder uses the future parser and it allows any expression that may appear in conditional logic (i.e. not class, define and resource expressions) to be used
 in interpolation.
 
-    
-
 (There are some recently discovered issues found regarding use of expression with nested braces)
 [# nnnn](TODO: Reference to Redmine issue)
 
 ### Can I add Hiera-2 backends?
+
+Yes, but there are also other options that give you more power. You can write bindings in Ruby,
+and you can provide a scheme handler. These options are discussed in ARM-9.
+
+A Hiera-2 backend is different from a Hiera-1 backend. It is also much simpler to implement as
+it basically just needs to return a hash.
 
 Backgound
 -----

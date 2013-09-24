@@ -36,6 +36,7 @@ The options hash should support:
  * key/name - same meaning as when given explicitly; mutually exclusive with first_found
  * first_found - array of String, a list of keys to try until one is found, its value is returned
  * default - same meaning as when given explicitly
+ * accept_undef - if set to true, a lookup that is undef is accepted
 
 Examples of usage
 
@@ -44,7 +45,15 @@ Examples of usage
     lookup { key => 'my_module::my_module_name', default => 'x' }
 
     lookup { first_found => ['site_params::x', 'site_params::y'], default => 'x' }
+
+In addition to these changes, the lambda should be allowed 1-3 arguments
+
+    |$result| { }
+    |$name, $result| { }
+    |$name, $result, $default| { }
     
+The second and third forms are valuable when using `first_found` and/or if a default value is
+used in combination with a block.
 
 Hiera.yaml improvements
 ---
