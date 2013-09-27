@@ -85,7 +85,17 @@ hiera.yaml could simply consist of this:
 
     hiera.yaml
     ---
-    version: 3    # (since are making changes)
+    version: 3
+    hierarchy:
+      - data/operatingsystem/${operatingsystem}
+      - data/osfamily/${osfamily}
+
+
+Which, if it is spelled out becomes this:
+
+    hiera.yaml
+    ---
+    version: 3
     hierarchy:
         - 
           category: 'common'
@@ -202,10 +212,10 @@ i.e. which makes it enough to specify:
     ---
     version: 3
     hierarchy:
-        - 'environment'
-        - 'operatingsystem'
-        - 'osfamily'
-        - 'common'
+        - category: 'environment'
+        - category: 'operatingsystem'
+        - category: 'osfamily'
+        - category: 'common'
         
 Since the rest can be derived.
 
@@ -239,12 +249,12 @@ Similar rules can be applied to binder_config.yaml to make the default look like
 
 This effectively hides the decisions made and flattens the contribution to the given
 category. If an equally elaborate structure is wanted at the site level to handle overrides
-it is the decision that is independant of how it is strctured in the module.
+it is the decision that is independent of how it is structured in the module.
 
 As an example, the ntp module may contribute
 
     when common {
-      bind ntp::package_name to 'misc-net/ntp'
+      bind 'ntp::package_name' to 'misc-net/ntp'
     }
 
 Even if its decision to contribute this name is based on osfamily and operatingsystem.
