@@ -1,10 +1,10 @@
 Improvements to ARM-9
 ===
-September 23, 2013
+September 29, 2013
 
 Since Data in Modules (ARM-9) was introduced, it has been exposed to users trying it
 out in practice. This document contains a discussion of improvements that are needed
-to make it easier to use and handle additonal use-cases.
+to make it easier to use and handle additional use-cases.
 
 Lookup
 ---
@@ -19,7 +19,7 @@ To address these, the lookup function should be made smarter. It is not enough
 to only support delegation to a lambda to do the handling of a default value. (It is still
 useful for other kinds of transformations of the result, so it should not be removed)
 
-To future proof the function while also making it more useful it should support
+To future-proof the function while also making it more useful it should support
 the following signatures:
 
     lookup(String key)
@@ -64,7 +64,7 @@ Hiera.yaml improvements
 
 Currently three entries are needed to specify a contribution to to a category.
 Even when simplified with smart defaults, there are still cases when all of them are need.
-For humans it is far easier if all elements have a name unless the attribute is a plural.
+For humans it is far easier if all elements have a name (unless the attribute is a plural).
 
 #### Private Hierarchy
 
@@ -81,15 +81,16 @@ flattened to default bindings in the common category when contributed to the sit
 (Remember that the contribution is specific to one request so this is safe to do).
 
 In fact, most of what is bound in a module is probably in the common category, and the module's
-hiera.yaml could simply consist of this:
+`hiera.yaml` can simply consist of this:
 
     hiera.yaml
     ---
     version: 3
     hierarchy:
-      - data/operatingsystem/${operatingsystem}
-      - data/osfamily/${osfamily}
+      - operatingsystem/${operatingsystem}
+      - osfamily/${osfamily}
 
+    datadir: 'data'
 
 Which, if it is spelled out becomes this:
 
@@ -97,15 +98,16 @@ Which, if it is spelled out becomes this:
     ---
     version: 3
     hierarchy:
-        - 
-          category: 'common'
+        - category: 'common'
           paths:
-             - data/operatingsystem/${operatingsystem}
-             - data/osfamily/${osfamily}
+             - operatingsystem/${operatingsystem}
+             - osfamily/${osfamily}
+
+    datadir: 'data'
 
 #### The three entries have too much redundant information
 
-Currently, the hiera.yaml for hiera 2 requires the hierarchy to be written like this:
+Currently, the `hiera.yaml` for hiera 2 requires the hierarchy to be written like this:
 
     ['osfamily', '${osfamily}', 'data/osfamily/${osfamily}']
     
@@ -120,7 +122,7 @@ Users want to be able to specify the data directory without having to repeat it 
 
 #### Operatingsystem should be included in the defaults
 
-Since osfamily alone is not enough in practice, an additional category for operatingsystem
+Since `osfamily` alone is not enough in practice, an additional category for `operatingsystem`
 should be added by default.
 
 The categories are then:
@@ -143,8 +145,7 @@ Solutions
     version: 3
     datadir:  'path to data_dir'
     hierarchy:
-        -
-          category: 'name'
+        - category: 'name'
           value:    '$some_var'
           paths:     
               - 'path to data'
@@ -153,13 +154,12 @@ Solutions
         - 
           . . .
 
-The data_dir when relative is relative to the hiera.yaml directory. 
-(This because a module should not be allowed to point to an arbitrary place on disk).
+The `datadir` is relative to the hiera.yaml directory (this because a module should not be allowed to point to an arbitrary place on disk). The `datadir` defaults to `'data'`.
 
-If a category has a datadir entry it is specific to that entry, and it is relative to the
-directory where the hiera.yaml file is.
+If a category has a `datadir` entry it is specific to the paths in that entry. 
 
-The entry path accepts a single Sring value (a single path), or an array of paths.
+The entry `path` accepts a single String value (a single path), and `paths` accepts an array of String (each string being a single path).
+
 
 #### binder_config.yaml
 
@@ -202,9 +202,9 @@ The entry path accepts a single Sring value (a single path), or an array of path
 If only the category name is given make the following assumptions:
 
 * the value is the value of a variable with the same name as the category (unless it is
-  common which is always 'true')
-* the path is datadir/category/value
-* datadir defaults to 'data'
+  `common` which is always 'true')
+* the path is `'category/value'`
+* `datadir` defaults to 'data'
 * if a string is given instead of an object, it is the category name
 
 i.e. which makes it enough to specify:
@@ -219,7 +219,7 @@ i.e. which makes it enough to specify:
         
 Since the rest can be derived.
 
-Similar rules can be applied to binder_config.yaml to make the default look like this:
+Similar rules can be applied to `binder_config.yaml` to make the default look like this:
 
     ---
     version: 2
@@ -238,12 +238,22 @@ Similar rules can be applied to binder_config.yaml to make the default look like
               - 'module-hiera:/bad_boy/*'
     
     categories:
-        - 'node'
+        - ['node', '${fqdn}']
         - 'operatingsystem'
         - 'osfamily'
         - 'environment'
         - 'common'
+        
+    extensions:
+      hiera-backends:
+        my_yaml: 'Puppetx::MyModule::MyYaml
+        my_json: 'Puppetx::MyModule::MyJson
 
+      scheme-handlers:
+        myservice: 'Puppetx::MyModule::MyService
+
+Note that category node can not use defaults at the moment since it is not decided which
+variable should be the default node selection variable. *OUTSTANDING ISSUE*.
 
 ### Support multiple paths per category
 
