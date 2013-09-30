@@ -135,7 +135,7 @@ The problems now are:
   per parameter has very low readability. The extra variable is a lesser evil in this case.
 * We now have a *leaking variables*-antipattern, you must make sure you use a unique name
   and if you need other logic to refer to the result (as oppose to the given value) this logic
-  would have to use the internally named variable (i.e. `$effective_package_nam`e in the example).
+  would have to use the internally named variable (i.e. `$effective_package_name` in the example).
   This is confusing (it is set as `'package_name'` from the user's perspective, but who knows on 
   the outside if this value is mangled in any way before it is used).
 * How can a user even figure out that they should refer to `$effective_package_name`?
@@ -233,9 +233,9 @@ overall hierarchy.
     ---
     :hierachy:
       - node/%{::fqdn}
-      - environment/%{::environment}
       - operatingsystem/%{::operatingsystem}
       - osfamily/%{::osfamily}
+      - environment/%{::environment}
       - common
 
 At this point the problems are:
@@ -252,11 +252,11 @@ Let's look at what the solution looks like (for both cases). We invent the modul
     ---
     :hierachy:
       - node/%{::fqdn}
-      - environment/%{::environment}
       - ntp/operatingsystem/%{::operatingsystem}
       - ntp/osfamily/%{::osfamily}
       - romulan/osfamily/%{::osfamily}
       - romulan/operatingsystem/%{::operatingsystem}
+      - environment/%{::environment}
       - common
 
 What are the problems at this point:
@@ -265,10 +265,11 @@ What are the problems at this point:
   a long list and lots of searching for data.
 * This is however a lesser evil than copying the romulan module settings and the ntp settings into 
   the same file (e.g. `operatingsystem/FreeBSD.yaml`). This is particularly bad if someone later
-  decides that the data in the `FreeBSD.yaml` file can be refactored/optimized by intermingling
-  the logic from the two modules. After that it is close to impossible to remove one of the modules.
+  decides that the data in the `FreeBSD.yaml` file can be refactored/optimized by breaking it up.   
+  After that it is hard work to figure out exactly what to update (especially if some modules use
+  names in the global name space).
 * We have manual work to do for each update of each module that has data. (And the smarter people
-  got we the data as described in the previous bullet, the worse it gets).
+  got with the data as described in the previous bullet, the worse it gets).
 * Basically we now have a *clone-and-own*-antipattern for the *data-concern*. It is better than what 
   we started with, but it is still quite bad.
   
@@ -406,7 +407,7 @@ There are also technical issues:
 Data in Modules
 ===============
 The experimental support for "data in modules" in Puppet 3.3.0 is a first implementation of facilities intended to solve the data composition issues. A full description and technical detail is 
-found in [ARM-9 Data-in-modules](http://links.puppetlabs.com/arm9-data_in_modules); a document you may want to read when digging deeper into the technical possibilities - but it is not required reading to begin using Data-in-modules and Hiera-2.
+found in the *armature* [ARM-9 Data-in-modules](http://links.puppetlabs.com/arm9-data_in_modules); a document you may want to read when digging deeper into the technical possibilities - but it is not required reading to begin using Data-in-modules and Hiera-2.
 
 You can safely skip reading the armature text at this point. The questions about what armatures is, the relationship between ARM-9 and ARM-8 (the ideas ARM-9 is based on), and the rationale for the implementation, are answered in the [FAQ](#FAQ) at the end of this document.
 
