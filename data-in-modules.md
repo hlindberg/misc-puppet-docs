@@ -282,10 +282,10 @@ The wiring of the data is simple as we get automatic lookup of parameters. If th
     ntp::package_name: 'net/ntp'
 
 We must ensure that we got the data type we expected in the ntp class. We can do this with
-one of the validate_<type> functions in the standard library:
+one of the `validate_xxx` functions in the standard library:
 
     class ntp($package_name) {
-      validate_string($service_ensure)
+      validate_string($package_name)
     }
 
 If you feel that the automatic coupling of data to parameter is too magic and you want to be explicit
@@ -325,7 +325,7 @@ data is coming from, while the second is believed to be clearer.
 <tr>
 <td><pre>
 class ntp($package_name) {
-  validate_string($service_ensure)
+  validate_string($package_name)
   package {'ntp':
     ensure =&gt; present
     name   =&gt; $package_name
@@ -335,7 +335,7 @@ class ntp($package_name) {
 <td><pre>
 class ntp::params {
   $package_name = hiera('ntp::package_name')
-  validate_string($service_ensure)
+  validate_string($package_name)
 }
 class ntp inherits ntp::params {
   package {'ntp':
@@ -386,15 +386,15 @@ What we have just seen is:
 
 * Use of Hiera-1 makes a clean separation of data and code
 * The centralized nature of Hiera-1 gives us new issues we end up with a plethora of hierarchical
-  levels and flea market of small data files since we need to solve the issues of every module
-  in one place.
+  levels and flea market of small data files since we need to support the requirements
+  of every module in one place.
 * We must manually maintain this structure as modules change.
 * We must manually maintain this structure as we add or remove modules
 
 Possible work arounds for some of the problems, but none of them are very appealing:
 
 * We could point directly to the data in modules (and not having to copy the data), this makes
-  it easier to get upgrades but requires that modules are always located at the same relative
+  it easier to get updates but requires that modules are always located at the same relative
   position.
 * We could symlink the data to the central location
 
@@ -412,8 +412,10 @@ You can safely skip reading the armature text at this point. The questions about
 
 Please note that the first implementation is experimental - the purpose is to get early feedback.
 
+**News !**
+
 A number of issues have already been raised and solutions have been implemented.
-This document describes the support that is added in the branch [arm9-puppet-3_4](https://github.com/hlindberg/puppet/tree/feature/arm9-puppet-3_4), and a brief description is made of how the corresponding features work when used with what is already in Puppet 3.3.
+This document describes the support that is added in the branch [arm9-puppet-3_4](https://github.com/hlindberg/puppet/tree/feature/arm9-puppet-3_4), and a brief description is made of how the corresponding features work when used with what is already in Puppet 3.3.0.
 
 The branch combines implementation of the Puppet Redmine issues #22574, #22646, and #22593.
 
@@ -425,16 +427,16 @@ In short, Data in Modules does the following:
   copied and maintained in a central location.
 * The inclusion (and exclusion) are controlled by patterns so you do not have to change the
   configuration as modules are added or removed (unless there is something wrong or special you
-  want).
+  need to patch).
 * You are given control over how the data from modules is composed and arranged in relation to
   other sources e.g. site level data overrides module level data.
 * Data bindings can be expressed in Hiera-2, or in Ruby.
 * A module (and the site/environment) may have multiple sets of data to allow a configuration
-  to select the suitable data sets. This an be used for several purposes; allowing modules to
+  to select the suitable data sets. This can be used for several purposes; allowing modules to
   supply defaults for different common configuration types, allow a module to be created for the sole 
   purpose of contributing different kinds of configuration for a combination of modules (i.e. a kind 
   of higher order module like a "lamp-stack" which in itself does not contain much functionality but 
-  it may configure the modules it depends on)
+  it may configure the modules it depends on).
   
 Added in the proposed changes for Puppet 3.4:
 
@@ -508,7 +510,7 @@ And since we did not use any interpolation in the data in our earlier example, t
 The data in the module is only picked up if there is a `hiera.yaml` file that tells the system
 about the layout of the data. By default this file should be placed in the root of the module.
 
-The content of the hiera.yaml file is described with examples; building up from the simplest use case to more advanced. **All of the examples are based on the proposal for 3.4. At the end, there is a description of the 3.3 format. Currently you must be using the version of Puppet on the branch to run these examples.**
+The content of the hiera.yaml file is described with examples; building up from the simplest use case to more advanced. **All of the examples are based on the proposal for 3.4. At the end of this section, there is a [description of the 3.3 format](#wiring_the_3.3_way). Currently you must be using the version of Puppet on the branch to run these examples.**
 
 #### Simplest - "Private" Hierarchy
 
@@ -578,7 +580,7 @@ Here is that example spelled out:
         paths:
           - 'operatingsystem/${operatingsystem}'
           - 'osfamily/${osfamily}'
-          - 'common' ]
+          - 'common'
 
     backends:
       - yaml
@@ -628,6 +630,8 @@ In this case, a decision is based on the combination of two facts. Only certain 
       - json
 
 You can read this as: *"I have a custom category that is based on two facts. I make decisions based on the combination, or if that does not exists, first on one, then the other fact. Others should view my decisions as having considered both facts at once - i.e. my bindings apply when data is looked up and the shared category 'custom' is defined as `custom = "$fact1-$fact2"`*
+
+See more about the `value` attribute under [Wiring all the Modules](#wiring_all_the_modules).
 
 #### What about multiple paths in multiple categories?
 
