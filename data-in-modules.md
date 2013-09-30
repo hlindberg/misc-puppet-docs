@@ -510,7 +510,7 @@ And since we did not use any interpolation in the data in our earlier example, t
 The data in the module is only picked up if there is a `hiera.yaml` file that tells the system
 about the layout of the data. By default this file should be placed in the root of the module.
 
-The content of the hiera.yaml file is described with examples; building up from the simplest use case to more advanced. **All of the examples are based on the proposal for 3.4. At the end of this section, there is a [description of the 3.3 format](#wiring_the_3.3_way). Currently you must be using the version of Puppet on the branch to run these examples.**
+The content of the hiera.yaml file is described with examples; building up from the simplest use case to more advanced. **All of the examples are based on the proposal for 3.4. At the end of this section, there is a [description of the 3.3 format](#wiring-the-33-way). Currently you must be using the version of Puppet on the branch to run these examples.**
 
 #### Simplest - "Private" Hierarchy
 
@@ -550,7 +550,7 @@ The simplest way to weave data into the overall hierarchy is to first use the su
 As you can see, there is no need to specify the paths if the following is true:
 
 * the used category name is also a variable / fact
-* the hiera-2 data files are under 'data/category_name/${category_name}' where category_name is
+* the hiera-2 data files are under `'data/category_name/${category_name}'` where category_name is
   the name given in the list.
 * The category is defined at the site level (by default `node`, `operatingsystem`, `osfamily`,
   `environment`, and `common`).
@@ -631,7 +631,7 @@ In this case, a decision is based on the combination of two facts. Only certain 
 
 You can read this as: *"I have a custom category that is based on two facts. I make decisions based on the combination, or if that does not exists, first on one, then the other fact. Others should view my decisions as having considered both facts at once - i.e. my bindings apply when data is looked up and the shared category 'custom' is defined as `custom = "$fact1-$fact2"`*
 
-See more about the `value` attribute under [Wiring all the Modules](#wiring_all_the_modules).
+See more about the `value` attribute under [Wiring all the Modules](#wiring-all-the-modules).
 
 #### What about multiple paths in multiple categories?
 
@@ -849,23 +849,27 @@ The `binder_config.yaml` looks like this:
     ---
     version: 1
     layers: [
-        { 'name': 'site',
-          'include': ['confdir-hiera:/', 'confdir:/default?optional']  
-        },
-        { 'name': 'modules',
-          'include': ['module-hiera:/*/', 'module:/*::default']
-        }
-      ]
+        - name: 'site',
+          include:
+            - 'confdir-hiera:/'
+            - 'confdir:/default?optional'
+
+        - name: 'modules',
+          include:
+            - 'module-hiera:/*/'
+            - 'module:/*::default'
     
     categories:
-      [['node',        "${fqdn}"],
-       ['osfamily',    "${osfamily}"],
-       ['environment', "${environment}"],
-       ['common',      "true"]
-      ]
+      - name: 'node'
+        value: "${fqdn}"
+      - 'operatingsystem'
+      - 'osfamily'
+      - 'environment'
+      - 'common'
+
 
 The above is the default, which is used if we do not have this file at all. Also if we have
-this file, but do not specify the sections for layers, or categories, we get the default as shown above.
+this file, but do not specify the sections for `layers`, or `categories`, we get the default as shown above.
 
 * The `layers` is an array ordered from highest priority to lowest. The default places the site layer
   at a higher priority than the module layer.
@@ -880,54 +884,165 @@ this file, but do not specify the sections for layers, or categories, we get the
 * The `categories` specifies:
   * The priority between the site wide categories (i.e. *the names of hierarchical levels* if
   we use Hiera-1 terminology). The highest priority is at the top.
-  * The categories `'node'`, `'environment'`, `'osfamily'` and `'common'` are always present;
-    they are added if left out of the specification. If included, they must have the relative order 
-    'node' > 'environment' > 'osfamily' > 'common'.
+  * The categories `'node'`, `'operatingsystem'`, `'osfamily'`, `'environment'`, and `'common'`
+    are always present; they are added if left out of the specification. If included, they must have 
+    the relative order  
+    'node' > 'environment' > 'operatingsystem' > 'osfamily' > 'common'.
     It is allowed to add new categories between these.
   * The *name* of the category (e.g. 'node', 'common') - these names are the categories that can
     be used in the module contributions being composed.
   * The *category-value* - this determines what the category value will be set to when processing a 
     request.
+  * If only the category name is specified (as a String), the value defaults to interpolation of
+    a variable with the same name as the category.
+  * To specify both the category name and value, either use an array with `['name', 'value']`, or an 
+    object with `name: 'name', value: 'value'`.
+    
+#### The category-value Explained in Detail
 
-*Note that people have raised issues about the format not being human friendly and
-that named attributes should be used to a greater extend. There is a propoal how this
-should be done. At the moment, the experimental implementation requires the somewhat elaborate specification as shown in this document.*
+The meaning of the category value requires a bit more explanation. In the typical use case
+(modules contribute data in the common category based on decisions from a private hierarchy when a request is made for a catalog) the more detailed meaning of category-value is not a concern in practice, and you can safely skip this section.
+
+If you are inventing your own site-wide categories or have organization specific modules
+that contribute bindings per `node` you should read this section.
+
+For all of the default categories  (except `'node'`), the category-value is simply the value of the corresponding fact variable (for `'node'` the value is `${fqdn}`). This value is set when a request is processed - e.g. when a request to compile a catalog is made.
+
+The bindings system assigns the category values from the facts in the request. As an example, using the default configuration for `binder_config.yaml` and this set of facts:
+
+* `$fqdn = 'kermit.example.com'`
+* `$operatingsystem = 'Gentoo'`
+* `$osfamily = 'Linux'`
+* `$environment = 'production'`
+
+the resulting category-values (used internally by the Puppet Bindings system) becomes:
+
+* `category['node']            = 'kermit.example.com'`
+* `category['operatingsystem'] = 'Gentoo'`
+* `category['osfamily']        = 'Linux'`
+* `category['environment']     = 'production'`
+* `category['common']          = true` # (it is always true)
+
+Then, if we have a `hiera.yaml` like this:
+
+    ---
+    version: 3
+    hierarchy:
+      - category: 'osfamily'
+        paths:
+          - 'operatingsystem/${operatingsystem}'
+          - 'osfamily/${osfamily}'
+
+And we have data like this:
+
+    <module>
+    |-- data                       #  Where all the data is kept
+    |   |-- osfamily               #  Data per osfamily
+    |   |   |-- FreeBSD.yaml       #  Data for FreeBSD
+    |   |   |-- . . .              #  etc.
+    |   |-- operatingsystem        #  Data per operatingsystem
+    |   |   |-- Gentoo.yaml        #  Data for Gentoo
+
+
+The resulting data binding corresponds to a 'conditional binding' (here expressed in pseudo code):
+
+    if category['osfamily'] == 'Linux' {   # since it is contributed to the osfamily category
+      ntp::package_name = 'net-misc/ntp'   # the content in Gentoo.yaml
+    }
+
+While this is in sort of lying; the ntp package name is not `'net-misc/ntp'` for all operating 
+systems in the Linux os-family, **it is still true for this (catalog) request**!
+
+Remember that Hiera bindings can really only be resolved once a set of facts are known.
+Specifically, the search paths used in Hiera-2 to make a decision what a value should be, have been resolved at the time the bindings from all sources are combined.
+
+Since the bindings system computes the result for each request it does not matter in practice that the statement is not universally true. The only thing we cannot do is to save the result and use it
+for another request with a different set of facts).
+
+To correct our "universal" lie, we can simply change the `hiera.yaml` to read:
+
+    ---
+    version: 3
+    hierarchy:
+      - category: 'operatingsystem'
+        paths:
+          - 'operatingsystem/${operatingsystem}'
+          - 'osfamily/${osfamily}'
+
+What happens now is that the contribution from the module results in:
+
+    if category['operatingsystem'] == 'Gentoo' { # since it is contributed to operatingsystem
+      'ntp::package_name' = 'net-misc/ntp'       # the content of Gentoo.yaml
+    }
+
+Which *is* universally true. It will also be true for all other requests even if the decision
+is made based on `osfamily` since the result is bound conditionally to the value of `$operatingsystem`.
+
+Thus, as a simple rule of thumb; **Avoid universal lies by contributing to a category based on the highest priority variable used in your paths.**
+
+In summary:
+
+* You only need to specify the category value of a category in `binder_config.yaml` or `hiera.yaml` 
+  if it is different than the value of the variable with the same name as the category. If it is 
+  different it must be stated the same way in all places the category is used - since this is 
+  effectively the definition of the category - and the same definition must be used everywhere (or 
+  the bindings will not take effect).
+
+* If you invent a custom category, it should use a category value that reflects the most specific 
+  value used in making the decision. (We saw an example of this earlier when combining two facts into
+  a value of `"${fact1}-${fact2}"`).
+
+
+#### Differences from 3.3.0
+
+This format is somewhat simplified from the 3.3.0 supported format:
+
+* A category that is named the same as a fact variable does not have to specify the value.
+* Consequently, if you are using the 3.3.0 version, you need to specify each category with an array 
+  containing the category name, and the value.
+* The 3.4 format supports either a String (the name), and Array ([name, value]), or an object
+  {name: 'name', value: 'value'}.
 
 #### When do I have to change the binder_config?
 
-The default town in the previous section should give you quite a lot of milage. It picks up all contributions from modules written using Hiera-2 and it picks up all contributions written in Ruby.
+The default shown in the previous section should give you quite a lot of milage. It picks up all contributions from modules written using Hiera-2 and it picks up all contributions written in Ruby.
 It defines that the site level data should override anything that comes from modules. It also has a default set of categories.
 
-This is enough to start experimenting. You need to change this file:
+This is enough to start experimenting. You only need to change this file:
 
 * to define additional layers (maybe you want in-house modules to be able to override public/forge 
   modules).
 * if you want to manually list modules and not rely on wild cards (maybe you want things locked down
   in production)
-* if you want to add categories
-* if you want to integrate data from other sources (adding a custom scheme)
+* if you want to add custom categories
+* If you want to exclude certain modules / sources
+* if you want to integrate data from other sources (i.e. adding a custom scheme)
+* if you want to use custom hiera-2 backends
 
+You have already seen how the categories are specified and used in `binder_config.yaml`, and in hiera.yaml. For inclusion and exclusion, which is based on URIs you need to learn more about the schemes used to refer to the various sources of bindings.
+
+Thus, examples showing inclusion and exclusion are presented later. (TODO: PROVIDE LINK).
 
 Schemes
 -------
 We need a way to refer to different sources of bindings. In this document we concentrate on
-data in modules where the data is expressed using Hiera-2, but there will be other sources
+data in modules where the data is expressed using Hiera-2, but there are, and will be other sources
 such as external services (e.g. ENC) that can be directly integrated. We also want an identity of a
-set of contributed data that continutes to work when sources are something other than modules.
-We could add support for file and ftp schemes that read serialized bindings models (which could be useful when testing, or as optimization / caching).
+set of contributed data that continues to work when sources are something other than modules.
+We could also add support for file and ftp schemes that read serialized bindings models (which could be useful when testing, or as optimization / caching).
 
-For these reasons, a decision was made to use a URI (Universal Resource Identifier). While you are not familar with the schemes used by the binder, the fundamental idea of a URI, its syntax, and the basic laws of URIs should be familiar to everyone.
+For these reasons, a decision was made to use a URI (Universal Resource Identifier). While you are not yet familiar with the particular schemes used by Puppet Bindings, the fundamental idea of a URI, its syntax, and the basic laws of URIs should be familiar to everyone.
 
-This section explains in more detail how the binder schemes work. The more advanced aspects are discussed in  [ARM-9](TODO://URL)
+This section explains in more detail how the schemes work. The advanced topic 'how to write a custom scheme' is covered in  [ARM-9](https://github.com/puppetlabs/armatures/blob/master/arm-9.data_in_modules/index.md#custom-bindings-scheme-handler)
 
-The bindings provider URI is specific to the used scheme. In the first implementation there are four such schemes:
+The URI is specific to the used scheme - i.e. it is the creator of a scheme that decides the meaning of the various sections of the URI. As you will see below, the schemes provided by default are either based on a symbolic name (i.e. the module name), or a path. A custom scheme may use the URI syntax for query parameters, etc.
 
-- `confdir-hiera`
-- `module-hiera`
-- `confdir`
-- `module`
+In the first implementation there are four such schemes:
 
-It is possible to add custom schemes.
+- `confdir-hiera:`
+- `module-hiera:`
+- `confdir:`
+- `module:`
 
 
 ### Hiera-2 Schemes
@@ -942,14 +1057,14 @@ the appointed directory will be included (those that do not are simply ignored).
 is relative to the module root.
 
 Thus, the URI `module-hiera:/*` uses the `hiera.yaml` in the root of every module. The URI `module-hiera:/*/windows`
-loads from every modules' windows directory, etc.
+loads from every modules' `windows` directory, etc.
 
 It is expected that `include` is used with broad patterns, and that a handful of exclusions are made (for broken/bad module
 data, or data that simply should not be used in a particular configuration).
 
-When the URI contains a wildcard, and there is no `hiera.yaml` present that entry is just ignored. When an explicit URI is used it is an error if the config file (or indeed the module) is missing.
+When the URI contains a wildcard, and there is no `hiera.yaml` present that entry is simply ignored. When an explicit URI is used it is an error if the config file (or indeed the module) is missing.
 
-Also see [Optional Inclusion](#optional_inclusion).
+Also see [Optional Inclusion](#optional-inclusion).
 
 ### Module / Confdir Schemes
 
@@ -961,51 +1076,179 @@ If you are interested in Ruby bindings, please see the corresponding section in 
 
 ### Optional Inclusion
 
-To make inclusion more flexible, it is possible to define that an (explicit) URI is optional - this means that it is
-ignored if the URI can not be resolved. The optionality is expressed using a URI query of `?optional`. As an example,
-if the module ‘`devdata`’ is present its contributions should be used, otherwise ignored, is expressed as
-`module-hiera:/devdata?optional`.
+To make inclusion more flexible, it is possible to define that an (explicit) URI is optional - this 
+means that it is ignored if the URI can not be resolved. The optionality is expressed using a URI 
+query of `?optional`. As an example, if the module ‘`devdata`’ is present its contributions should be 
+used, otherwise ignored, is expressed as:
 
-This can be used to minimize the amount of change to the binder_config.yaml and allowing the
+    module-hiera:/devdata?optional
+
+This can be used to minimize the amount of change to the `binder_config.yaml` and allowing the
 configuration to be dynamically changed depending on what is on the module path. As an example
-a developer can check out a devbranch with experimental overrides without having to restart the master. 
+a developer can check out a `devbranch` with experimental overrides without having to restart the master. 
+
+Hiera-2 Backends
+---
+This is an advanced topic that can be safely skipped.
+
+Hiera-2 backends are far simpler to implement than the corresponding Hiera-1 backends. This because the contract in Hiera-2 is for the backend to return a hash of name to value while the backend is
+responsible for the search itself in Hiera-1.
+
+The details how to write a hiera-2 backend are presented in ARM-9 in the section [custom hiera-2 backend](https://github.com/puppetlabs/armatures/blob/master/arm-9.data_in_modules/index.md#custom-hiera-2-backend).
+
+ARM-9 also discusses the various options for integrating data bindings in various forms. As an example, bindings in Ruby, as well as scheme handlers provide a far more powerful way of handling data.
+
+Specifying Custom Schemes, and/or Hiera-2 Backends
+---
+This is an advanced topic that can be safely skipped.
+
+If you have implemented a custom scheme, or a hiera-2 backend these must be added to the binder_config.yaml. The custom schemes may then be used in the specification of what to include/exclude in the binder_config.yaml's layers specification. Likewise, any custom hiera-2 backends may then be used in the various `hiera.yaml` files in the system.
+
+This means that currently, a module can not use a custom scheme unless it is added to the binder_config.yaml. This may change in the future.
+
+The specification of these is quite simple:
+
+    extensions:
+      hiera_backends:
+        custom1: 'name of class'
+        custom2': 'name of class'
+    
+      scheme_handlers:
+        custom1: 'name of class'
+        custom2: 'name of class'
+        
+Using the example from ARM-9 (where a module named 'Awesome' contains a backend called
+EchoBackend, and a scheme called EchoScheme):
+
+    extensions:
+       hiera_backends:
+          echo: 'Puppetx::Awesome::EchoBackend'
+          
+       schema_handlers:
+          echo: 'Puppetx::Awesome::EchoScheme'
 
 
 Applying what we Learned
 -----
 
-### The ntp Example binder_config
+### Testing the ntp Example binder_config
 
-In our ntp example, we used a category called `operatingsystem`. Unfortunately, the default
-`binder_config.yaml` does not contain this category, and if we tried to run this we would
-get an error.
+In our ntp example from the start of the document, we can use the default binder_config.yaml so we can start testing it right away.
 
-    TODO Show the error.
+We simply need to turn on the binder feature using `--binder true` as a setting, or on
+the command line. (Alternatively, if `--parser future` is used, the binder is also turned on by default).
 
-Since the categories used in the modules must be present in the `binder_config.yaml` we add it like this:
+We can now test this on the command and lookup the ntp::package value:
 
-    categories:
-      [['node',            "${fqdn}"],
-       ['osfamily',        "${osfamily}"],
-       ['operatingsystem', "${operatingsystem}"],
-       ['environment',     "${environment}"],
-       ['common',          "true"]
-      ]
+    puppet apply --binder -e 'notice lookup("ntp::package_name")'
+    
+This will lead to an error since the facts are not known. Unless you are indeed running on FreeBSD, or Gentoo you will see the error:
 
-The reason all used categories must be in this list is that all data from all modules are in a flat space and everyone must agree on priority or there would be chaos (again sorry, Romulans). (For the Romulans in the audience (and also for other good reasons) there is a discussion about supporting "private data" - see [Private Module Data](#private_module_data) below).
+    Error: did not find a value for the name 'ntp::package_name' on node 'demo.example.com'
+    
+Naturally Since the decision is based on `operatingsystem` (Gentoo) and `osfamily` (FreeBSD and Linux) we need to also supply those facts. This can be done this way (all on one line):
 
-Issues With current implementation
-===
-Since data-in-modules where made available as an experimental implementation in Puppet 3.3 people
-have been asking questions, describing their needs and given critique. 
+    FACTER_OPERATINGSYSTEM=Gentoo FACTER_osfamily=Linux puppet apply -e 'notice lookup("ntp::package_name")'
+    
+And we should now see the expected result:
 
-* The files are not human friendly - use attributes
-* There is much redundancy in the typical case
-* Modules need to be able to have their own hierarchy to be both self contained and configurable
-* The lookup function needs to handle defaults (and have some additional features like 'first-found' 
-  given a list of keys)
+    Notice: Scope(Class[main]): net-misc/ntp
+
+If you need many facts to test, you can set all of the required environment variables and export them before executing. How this is done depends on the shell you are using.
+
+In bash you can set and export variables like this:
+
+    FACTER_OPERATINGYSTEM=Gentoo
+    FACTER_OSFAMILY=Linux
+    export FACTER_OPERATINGSYSTEM FACTER_OSFAMILY
+
+You may want to do this in a sub-shell so these exports do not override your regular set of facts.
+
+### Excluding a Module
+
+We find that one of our module (aptly named 'batboy') contributes data that is not what we want. Or worse, that there are syntax errors in its hiera.yaml. If we want to exclude the contribution from 'batboy' we can do su by modifying the binder_config.yaml.
+
+We want to use the defaults for categories, so we only include the layers specification:
+
+    ---
+    version: 1
+    layers: [
+        - name: 'site',
+          include:
+            - 'confdir-hiera:/'
+            - 'confdir:/default?optional'
+
+        - name: 'modules',
+          include:
+            - 'module-hiera:/*/'
+            - 'module:/*::default'
+          exclude:
+            - 'module-hiera:/badboy/
+            
+The contribution from the module 'badboy' that was included by the URI 'module-hiera:/*/' is excluded by the rule module-hiera:/badboy/ and no attempt is then made to read it's hiera.yaml (nor is the data included).
+
+If we also want to exclude its ruby bindings we do that like this:
+
+          exclude:
+            - 'module-hiera:/badboy/
+            - 'module:/badboy::default
+
+### Selecting an alternative set of bindings
+
+A module (called 'awesome') may include alternative set of bindings configured for different usage scenarios.
+
+    awesome
+    |-- hiera.yaml
+    |-- data
+    |-- |-- default
+    |   |   |-- common.yaml
+    |-- |-- for_x
+    |   |   |-- hiera.yaml
+    |   |   |-- data
+    |   |   |   |-- common.yaml
+    |-- |-- for_y
+    |   |   |-- hiera.yaml
+    |   |   |-- data
+    |   |   |   |-- common.yaml
+
+And we we would like to use the 'for_x' bindings instead of the default bindings. We then exclude the default, and include the 'for_x' like this:
+
+          include:
+            - 'module-hiera:/awesome/data/for_x
+          exclude:
+            - 'module-hiera:/awesome/
+            
+In this example, the for_x was placed under 'data', but it could be located anywhere we like in the module. The path we specify after the module name, is relative to the root of the module.
+
+Naturally, you need to consult the documentation of the module in question which alternative sets it provide, if it provides a default and the intention is to use both (default and a special set), or of the default must be excluded.
+
+### Overriding a value at site level
+
+If you want to override a value set in a module with one at the site level, you can set the value in the site's hiera-2 data. This set of data is included by default (as long as the `hiera.yaml` version in the root of the site is of version 2 or 3.
+
+The structure you use in your hiera, depends on what you need to base the decision on.
+
+If you want to override for a given node:
+
+The structure:
+
+    <confdir>
+    |-- hiera.yaml
+    |-- data
+    |-- |-- node
+    |   |   |-- kermit.example.com.yaml
+
+The hiera.yaml:
+
+    hiera.yaml
+    ---
+    version: 3
+    hierarchy:
+      - node/${fqdn}
+    
+    backends:
+      - yaml 
  
-This is described, along with proposed solutions in an adjoining document called 'improvements-arm-9.md' (This [link](improvements-arm-9.md) may work depending on where/how you consume this document)
  
 FAQ
 ===
@@ -1022,6 +1265,23 @@ it only assigns data to keys in its own namespace, or to keys that exist for the
 collecting information from other contributors. That way the system can enforce these rules. For modules that contain configuration for others, the user integrating such a module would need
 to know what it does (or trust it because it is internal to the organization).
 
+### Can a hierarchy be private to a module
+
+Yes, only the decisions that were made by using a hierarchy of paths are visible. The
+data bindings are not private.
+
+### Can I secure the values some way?
+
+Currently only somewhat secure. Once the values are bound, they can be looked up by any logic that 
+knows the name. Likewise, the resulting value is placed in a resource (and thus in catalog) and can be read from there in various ways.
+
+While it is possible to have implement a secure backend that reads encrypted data on disk, this
+is not completely safe since the values are decrypted when they are used, and the used values are
+stored in the catalog.
+
+To have completely secure data means it needs to be encrypted all the way and the reader must have the means to decrypt it. Support for this may appear in puppet in the future. If you want to implement this now, you need to have a provider for a type and having this provider perform the decryption on the agent. (Thus never placing the clear text value in the catalog). 
+
+
 ### Can I interpolate the values of other keys?
 
 Yes, you can call the lookup function in interpolation.
@@ -1031,8 +1291,8 @@ Yes, you can call the lookup function in interpolation.
 Yes, the Puppet Binder uses the future parser and it allows any expression that may appear in conditional logic (i.e. not class, define and resource expressions) to be used
 in interpolation.
 
-(There are some recently discovered issues found regarding use of expression with nested braces)
-[# nnnn](TODO: Reference to Redmine issue)
+If you want to use this, you should use a version of puppet that includes a fix for Redmine issue #22593. (The 3.4 branch of the data in modules includes this fix).
+
 
 ### Can I add Hiera-2 backends?
 
@@ -1041,6 +1301,13 @@ and you can provide a scheme handler. These options are discussed in ARM-9.
 
 A Hiera-2 backend is different from a Hiera-1 backend. It is also much simpler to implement as
 it basically just needs to return a hash.
+
+See [Hiera-2 backends](hiera-2-backends) in this document.
+
+### What are the performance implications?
+
+Performance tuning of the feature has not taken place yet. This will be done before 'data in
+modules' is released.
 
 Backgound
 -----
@@ -1068,4 +1335,8 @@ hierarchical data adapted to work using the bindings system.
 ### What is Puppet Bindings?
 
 Puppet Bindings is the technical underpinnings on which 'Data-in-Modules' is built. It is a mechanism
-for *dependency injection* (i.e. implicit and explicit "lookup" of composed bindings of data and code). It is described in [ARM-9](http://links.puppetlabs.com/arm9-data_in_modules)
+for *dependency injection* (i.e. implicit and explicit "lookup" of composed bindings of data and code). It is described in [ARM-8](http://links.puppetlabs.com/arm8-puppet_bindings). Be warned that it is not an easy read, and ARM-8 includes several aspects of dependency injection that are not directly relevant to data in modules, many which are purely internal to the puppet runtime, others that are of interest to integrators.
+
+### Is there some lighter reading about Puppet Bindings than ARM-8?
+
+Not currently, but there will be developer introduction and documentation available when Puppet Bindings is no longer experimental. 
