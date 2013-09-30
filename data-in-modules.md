@@ -247,7 +247,7 @@ At this point the problems are:
   FreeBSD data in the same file - unless, we also for this problem break out the hierarchies
   into a separate set.
   
-Let's look at what the solution looks like (for both cases). We invent the module `romulan` (they are not known for the adherence to logic) that has osfamily and operatingsystem reversed. We could then do this.
+Let's look at what the solution looks like (for both cases). We invent the module `romulan` (Romulans are not known for the adherence to logic) that has `osfamily` and `operatingsystem` reversed. We could then do this.
 
     ---
     :hierachy:
@@ -261,11 +261,11 @@ Let's look at what the solution looks like (for both cases). We invent the modul
 
 What are the problems at this point:
 
-* We may have hundreds of modules! Some written by "romulans" and we end up with a long list and
-  lots of searching for data.
+* We may have hundreds of modules (some written by "Romulan" users), and we end up with
+  a long list and lots of searching for data.
 * This is however a lesser evil than copying the romulan module settings and the ntp settings into 
   the same file (e.g. `operatingsystem/FreeBSD.yaml`). This is particularly bad if someone later
-  deciders that the data in the FreeBSD.yaml file can be refactored/optimized by intermingling
+  decides that the data in the `FreeBSD.yaml` file can be refactored/optimized by intermingling
   the logic from the two modules. After that it is close to impossible to remove one of the modules.
 * We have manual work to do for each update of each module that has data. (And the smarter people
   got we the data as described in the previous bullet, the worse it gets).
@@ -411,8 +411,11 @@ found in [ARM-9 Data-in-modules](http://links.puppetlabs.com/arm9-data_in_module
 You can safely skip reading the armature text at this point. The questions about what armatures is, the relationship between ARM-9 and ARM-8 (the ideas ARM-9 is based on), and the rationale for the implementation, are answered in the [FAQ](#FAQ) at the end of this document.
 
 Please note that the first implementation is experimental - the purpose is to get early feedback.
-A number of issues have already been raised and solutions have been described. These issues
-are noted in this document.
+
+A number of issues have already been raised and solutions have been implemented.
+This document describes the support that is added in the branch [arm9-puppet-3_4](https://github.com/hlindberg/puppet/tree/feature/arm9-puppet-3_4), and a brief description is made of how the corresponding features work when used with what is already in Puppet 3.3.
+
+The branch combines implementation of the Puppet Redmine issues #22574, #22646, and #22593.
 
 ### Main Features
 
@@ -432,26 +435,39 @@ In short, Data in Modules does the following:
   purpose of contributing different kinds of configuration for a combination of modules (i.e. a kind 
   of higher order module like a "lamp-stack" which in itself does not contain much functionality but 
   it may configure the modules it depends on)
+  
+Added in the proposed changes for Puppet 3.4:
+
+* A module may use a "private" hierarchy, other modules does not have to use the same hierarchy.
+  (This is the default).
+* A module may contribute data that is "woven" into an overall hierarchy. (This was the only mode
+  in the Puppet 3.3 implementation).
+
+#### Category
+  
+The term "category" is used in data-in-modules to denote a *"named level in the overall hierarchy"*. So when you read *"the common category"*, this means the *"The 'common' hierarchal level/priority in the site-wide overall hierarchy"*. In Hiera-1, there is no corresponding term, it simply has a lists of paths. It may help to mentally translate the expression *"the osfamily category"* to a Hiera-1 path such as `"osfamily/${osfamily}"` - i.e. *"the data that is specific to osfamily"*. 
+
+The category concept is explained further when explaining how the site-wide composition of all data is done.
 
 ### Hiera-2 Features
 
-There are two major differences between Hiera-1 and Hiera-2
+The major differences between Hiera-1 and Hiera-2 are:
 
 * Hiera-2 uses Puppet Language syntax for interpolation of expressions - i.e. `${expression}`, where
   Hiera-1 only supported interpolation of variables, and with a different syntax `%{varname}`.
 * The `hiera.yaml` configuration file has changed
     * variables are interpolated using Puppet Language syntax
-    * since the result is contributed to an overall configuration of data, there is the need
+    * when the result is to be woven into the the overall hierarchy of data, there is the need
       to specify how.
-* Hiera-2 loads dynamically, if the hiera.yaml is changed these changes are picked up when processing
-  the next request (e.g. for a catalog).
+* Hiera-2 loads dynamically, if the `hiera.yaml` is changed these changes are picked up
+  when processing the next request (e.g. for a catalog).
 
 Introducing data-in-modules presented an opportunity to also address general issues. Hiera-1 only allows interpolate of variables and uses a different interpolation syntax (`%{varname}`) than the Puppet Language (`${expression}`).
 
-In Hiera-2 any interpolateable Puppet expression can be used, including function calls. The string
-is treated like a Puppet Language double quoted string, which means that escaping special characters is also possible.
+In Hiera-2 any Puppet expression that is normally allowed in interpolation, can be used, including 
+function calls. A string in Hiera-2 data, is treated like a Puppet Language double quoted string, which means that it supports interpolation and escaping of special characters.
 
-The other notable change is to the `hiera.yaml` required to make it possible to compose/aggregate multiple hierarchies.
+The other notable changes to the `hiera.yaml` are those that deal with weaving the module's data with data from other modules.
 
 Note that it is still possible to use Hiera-1, and even combine it with Hiera-2. Hiera-2 may be used both at site level and for contributions from modules.
 
@@ -485,14 +501,219 @@ You need the data in the module. The default settings are to use a directory cal
 ### Interpolation and Escaping Special Characters
 
 And since we did not use any interpolation in the data in our earlier example, there is nothing to change. If there was, we would need to change the `%{varname}` Hiera-1 syntax to `${varname}`
-(or `$varname`). We also need to look at the user of a literal `$` since it needs to be escaped. While doing this, attention is also needed to the backslash `\` character as it is now used for escaping. In short - Hiera-2 uses the same rules as for the Puppet Language double quoted string.
+(or `$varname`). We also need to look at the use of a literal `$` since it needs to be escaped. While doing this, attention is also needed to the backslash `\` character as it is now used for escaping. In short - Hiera-2 uses the same rules as for the Puppet Language double quoted string.
 
 ### Telling Puppet Bindings how Data is Organized
 
 The data in the module is only picked up if there is a `hiera.yaml` file that tells the system
 about the layout of the data. By default this file should be placed in the root of the module.
 
-So we add this `hiera.yaml` to the modules's root:
+The content of the hiera.yaml file is described with examples; building up from the simplest use case to more advanced. **All of the examples are based on the proposal for 3.4. At the end, there is a description of the 3.3 format. Currently you must be using the version of Puppet on the branch to run these examples.**
+
+#### Simplest - "Private" Hierarchy
+
+With this `hiera.yaml` to the modules's root:
+
+    ---
+    version: 3
+    hierarchy:
+      - 'operatingsystem/${operatingsystem}'
+      - 'osfamily/${osfamily}'
+      - 'common'
+
+    backends:
+      - yaml
+      - json
+
+We contribute all of the module's bindings as defaults in the "common" category. You can view this a as a statement about this module's data that says: *"All my data is at 'common' priority in relation to all other contributions. No one else needs to know what my decisions are based on. I simply contribute my default/common values."*
+
+A user of this module does not have to do anything to use it. The 'common' category is always present in the overall hierarchy. 
+
+#### Weaving into the Overall Hierarchy
+
+The simplest way to weave data into the overall hierarchy is to first use the suggested default layout of data (as in all the previous examples where data for say `osfamily`, is found under `data/osfamily/${osfamily}`. Using the same example as in the simple private hierarchy, but now weawing it:
+
+
+    ---
+    version: 3
+    hierarchy:
+      - category: 'operatingsystem'
+      - category: 'osfamily'
+      - category: 'common'
+
+    backends:
+      - yaml
+      - json
+
+As you can see, there is no need to specify the paths if the following is true:
+
+* the used category name is also a variable / fact
+* the hiera-2 data files are under 'data/category_name/${category_name}' where category_name is
+  the name given in the list.
+* The category is defined at the site level (by default `node`, `operatingsystem`, `osfamily`,
+  `environment`, and `common`).
+  
+What we specified now is that the bindings are contributed per category. You can view this as a statement about the module's data that says: *"My data per category is at the same priority as all other contributions for the same 'site-wide' categories. e.g. My decisions at `osfamily` priority should not override someone else's decision at `operatingsystem` priority"*
+
+Weaving data like this is of value when you:
+
+* want to provide data bindings in a module for the purpose of configuring/overriding other 
+  modules
+* like to be able to "mix in" decision making about what a value should be either at site 
+  level or in another module. 
+
+It is expected that the "private" hierarchy is sufficient in most cases.
+
+#### Advanced Decision Making
+
+Sometimes it is not enough to base the decision on a single variable, or indeed a single path.
+Hiera-2 allows specifying multiple paths per category (you have already seen that in the "private hierarchy" example where data on all of the paths where contributed in the common category.
+
+Here is that example spelled out:
+
+    ---
+    version: 3
+    hierarchy:
+      - category: 'common'
+        paths:
+          - 'operatingsystem/${operatingsystem}'
+          - 'osfamily/${osfamily}'
+          - 'common' ]
+
+    backends:
+      - yaml
+      - json
+
+This has the exact same meaning as in the earlier "private hierarchy" example. 
+
+You can use several paths for any category. Say that you want to control the binding of data based on both `operatingsystem` and `environment` (in a module that is specific to your organization naturally since public modules can not really know about the names of your environments). Having this in an organization specific module makes it easy to mix it in without having to change anything at the site level.
+
+    ---
+    version: 3
+    hierarchy:
+      - category: 'operatingsystem'
+        paths:
+          - 'env/${environment}/os/${operatingsystem}'
+          - 'os/${operatingsystem}'
+
+      - category: 'osfamily'
+        paths:
+          - 'env/${environment}/osfamily/${osfamily}'
+          - 'osfamily/${osfamily}'
+
+    backends:
+      - yaml
+      - json
+
+
+You can read this as: *"I contribute data to the shared 'operatingsystem' and 'osfamily' priorities.
+My decision what I contribute is based on combinations of environment and operatingsystem/osfamily. Others can view my data as being only based on operatingsystem, because I have already made the decisions, and they do not need to know how I did that."*
+
+#### Even more advanced Decision Making
+
+In this case, a decision is based on the combination of two facts. Only certain combinations require a specific value and you do not want to have a file for each combination. Further, we want this advanced decision making to be woven into a custom category (that we in a flurry of imagination named 'custom').
+
+    ---
+    version: 3
+    hierarchy:
+      - category: 'custom'
+        paths:
+          - 'combined/${fact1}-${fact2}'
+          - 'fact1/${fact1}'
+          - 'fact2/${fact2}'
+        value: '${fact1}-${fact2}'
+
+    backends:
+      - yaml
+      - json
+
+You can read this as: *"I have a custom category that is based on two facts. I make decisions based on the combination, or if that does not exists, first on one, then the other fact. Others should view my decisions as having considered both facts at once - i.e. my bindings apply when data is looked up and the shared category 'custom' is defined as `custom = "$fact1-$fact2"`*
+
+#### What about multiple paths in multiple categories?
+
+Basically, when you have multiple categories, the functionality compared to hiera-1 is really just that you have tagged certain positions in the list with the category name to contribute to for that section of the list. From the perspective of the module, it is a hierarchy of paths from top to bottom just as if there were no categories involved.
+
+#### Should I always use the "private hierarchy"?
+
+Probably yes, and for most public modules on the forge, even more so.
+
+Weaving is of value when there is a more intimate relationship between modules, when one is used to configure others - in your organization when you want to customize per environment, or if you want to support a configured "stack of modules", and similar scenarios. 
+
+Before the support for data-in-modules, none of these more advanced scenarios could not be packaged up an shared since it meant merging all of the required data definitions into one and the same hiera-1 structure.
+
+#### A simple decision - where is the data?
+
+In the `version: 3` of `hiera.yaml`, the decision where the data is relative to the `hiera.yaml` is broken out into a `datadir` attribute. It defaults to `"data"`. You can also set the `datadir` attribute per category which then overrides the attribute at top level.
+
+    ---
+    version: 3
+    hierarchy:
+      - category: 'common'
+        paths:
+          - 'operatingsystem/${operatingsystem}'
+          - 'osfamily/${osfamily}'
+          - 'common' ]
+
+    datadir: 'module-data'
+    
+    backends:
+      - yaml
+      - json
+
+In this example, all paths are now appended to `'./module-data/'`.
+
+Here we set the `datadir` for one of the categories:
+
+    ---
+    version: 3
+    hierarchy:
+      - category: 'osfamily'
+        paths:
+          - 'operatingsystem/${operatingsystem}'
+          - 'osfamily/${osfamily}'
+
+      - category: 'common'
+        datadir: ''
+
+    datadir: 'module-data'
+    
+    backends:
+      - yaml
+      - json
+
+This will use `'./common'{.yaml, .json}` for the `common` category path, and `./module-data/` as 
+prefix for the `osfamily` category paths. (The example does not spell out the path for the common category, it defaults to 'common').
+
+Wiring the 3.3 way
+---
+In the Puppet 3.3 support for data-in-modules:
+
+* There is no support for a "private hierarchy" - only the "weaving" mode is supported
+* Since only weaving is supported, the overall hierarchy must list all categories required by
+  all modules. This was made worse by the 'operatingsystem'-category not being included by
+  default - leading to that the very first thing that was needed was to modify the otherwise fully
+  functional default for the overall site's data composition. In turn something that needed to be 
+  understood in order to modify it. And this would hit all users, not only the author of data
+  in one particular module. (This was really bad).
+* There is much redundancy in the format (version: 2) as it requires that everything
+  is spelled out.
+* There is no `datadir` attribute, each path must contain the full path (relative to hiera.yaml)
+
+This means that the much simpler specification available on the 3.4 branch:
+
+    ---
+    version: 3
+    hierarchy:
+      - 'operatingsystem/${operatingsystem}'
+      - 'osfamily/${osfamily}'
+      - 'common'
+
+    backends:
+      - yaml
+      - json
+
+
+Must be written like this for 3.3 (using weaving):
 
     ---
     version: 2
@@ -506,102 +727,19 @@ So we add this `hiera.yaml` to the modules's root:
       - json
 
 
-Since we are not using any data in `json`, we can remove that entry. It is only shown here to point out that you can also use data files in Json format. (See [FAQ](#FAQ) for more information about
-backends).
+Note that the 3.3. format has `version: 2`. (It is still supported on the 3.4 branch to not
+break anyone that has already started to experiment). The version:2 format should be viewed as deprecated, and it will be dropped.
 
-By looking at the file we see three things:
+The three values in the arrays under hierarchy are "category name", "category value", and "path".
+The value is the same as the category name in all cases except for custom categories based on
+combined facts (as you saw earlier), and for the common category where it must be set to "true".
 
-* The format of the file is versioned, currently at version 2.
-* Puppet Language string interpolation is used. And thirdly, the hierarchy is specified with a  
-  slightly more elaborate structure where each entry in the hierarchy have three values (instead of  
-  Hiera-1's one path value). This is explained below.
-* The paths work the same way as in Hiera-1, but use Puppet Language interpolation.
-
-*Note that feedback have been received  about what seems like redundant information, and
-that the three elements have no attribute names associated with them which makes it
-hard to guess what the meaning is. There is a proposal that reduce the amount of text
-that needs to be entered to a minimum. At the moment, the experimental implementation requires the
-somewhat elaborate specification as shown in this document.*
+Quite frankly, this construct ended up being this way because this was the internal structure.
+It is just ugly and makes the specification overly complicated.
 
 
-### Why the three data elements?
-
-#### The first element - the category
-
-Imagine trying to combine the data contributions from two modules with the following (Hiera-1) hierarchies:
-
-    hierarchy:
-      - 'data/%{DCR_nbr}'
-      
-    hierarchy:
-      - 'data/moduledata'
-
-Which of the two bindings should have higher priority when they are combined, or are they at the
-same priority? To solve this we need to give the level a name. 
-
-This name is the first element.
-
-Thus: **We need the first element to allow us to add the individual pieces at the right level
-in the final hierarchy.**
-
-We use the term **category** for the "name of the hierarchical level".
-
-#### The second element - the category value
-
-The second element requires a longer explanation.
-
-If we look at an entry such as this:
-
-      - ['osfamily',        '${osfamily}',        'data/osfamily/${osfamily}' ]
-
-has lots of redundant information. In fact we could do away with the path for all paths
-following the formula typical used; the data is in the data directory, under a directory named after
-the category, and then in a file with a name matching the category value. 
-This simplification is not yet implemented, in the first implementation (Puppet 3.3.0) all three has to be given - but this will be improved.
-
-We still need the third path element when a Romulan have defined the structure differently.
-Some may have their data to first switch on osfamily, and then have different values per environment - e.g.
-
-      - ['osfamily',        '${osfamily}',        'data/osfamily/${osfamily}/${environment'} ]
-
-Or they want to reference a file with data while testing that is named after something
-completely different - say the issue they are working on, and you find an entry like:
-
-      - ['osfamily',        '${osfamily}',        '/usr/mary/devdata/issue475' } ]
-
-Thus, removing the entry that specifies the value - it would not possible to (always) use the file name referenced by the path.
-
-Another future improvement is to remove the need to specify the common category with the value
-true and a path, one value 'common' should be enough here. 
-
-      - ['common',        'true',        'data/common' ]
-
-The term **category-value** was chosen for this second element. This value typically
-comes from a fact (such as the value of `$osfamily`), but it could also come from an expression such as a function call that determines a) if the category applies to the request or not, and b) what the value is.
-
-As an example, you may have something like a rack number, and you would like to specify
-a binding for racks 1-10 that are different from racks 11-20, etc. You can perhaps get the
-rack number from a fact, or by looking it up in a system that keeps a mapping from some fact(s)
-to rack-number. If you were not able to use a function you would need to write 20 data files, one
-per rack-number. You call this category rack_bay, and the function returns a value 1 for the first
-bay, 2 for the second etc. (Unfortunately in the first implementation you have to repeat the
-call for the path)
-
-     - ['rack_bay', '${bay_of_rack($rack_number)}', 'data/rack_bay/${bay_of_rack($rack_number)}']
-      
-If the function determines that the request being processed is not for a host in a rack at all,
-it simply returns an empty string to mean, "it is not in this category at all".
-
-Thus: **We need the second value to give us the value to match on since we cannot derive it
-from the other two (name and path) at all times**
-
-#### The third element - the path
-
-Unsurprisingly, this element is needed to refer to the file that contains the data.
-(As you saw above, we could do away with the path if the structure follows the typical formula).
-
-
-### Making Use of the Data
+Making Use of the Data
+---
 
 As shown earlier, there are two schools; using implicit or explicit setting of parameter values.
 
@@ -637,7 +775,7 @@ You can assert:
 
 * The basic data types: `'String'`, `'Integer'`, `'Float'`, `'Boolean'`
 * The datatype `'Pattern'` (a regular expression), but there is no way it can be specified using
-  Hiera-2, but it is shown here for completeness.
+  only Hiera-2, but it is shown here for completeness.
 * The abstract data type `'Number'` = `'Integer'`, or `'Float'`.
 * The abstract data type `'Literal'` = `'Number'`, `'Boolean'`, `'String'`, `'Pattern'`
 * An `'Array'` which also allow specification of the type of its elements e.g. `'Array[String]'`
@@ -648,7 +786,7 @@ You can assert:
 * If key and element type is not specified for a `'Hash'` it is `'Hash[Literal, Data]'`, and if only
   one type parameter is given it is used for the value, and the key is `'Literal'` by default.
   
-The binding system can assert that the data conforms to the type.
+The binding system asserts that the looked up data conforms to the type.
 
 As an example, if you want to assert that the data you are looking up is an Array containing Arrays of Strings:
 
@@ -656,7 +794,40 @@ As an example, if you want to assert that the data you are looking up is an Arra
     
 and you got something else, you will see an error like this:
 
-    incompatible type, expected: Array[String], got: String     
+    incompatible type, expected: Array[String], got: String
+    
+### Lookup with Default and other Options
+
+The lookup in 3.3. had some deficiencies:
+
+* It returned undef if value was not defined
+* It did not support default value
+
+The lookup function in the 3.4 branch has been improved (Redmine ##22574) and now supports a third argument for default value. At the same time, if no default is given, and no value is found an error will be raised.
+
+    lookup('mykey', 'String', 'this is the default')
+    
+The default value (as well as the other attributes) can now be given in the form of a hash. (If you are not using future parser, you need to assign the hash to a variable before passing it, in the future parser, the hash can be given directly.
+
+    lookup({ name => 'mykey', type => 'String', default => 'this is the default'})
+    
+It is possible to pass the name as an individual argument, and the rest as options (in the
+case there is also a name in the options, the individual argument wins:
+
+    lookup('mykey', { type => 'String', default => 'this is the default'})
+
+Note that if a hash is given as the third argument then this is a default value, not options.
+
+The options are:
+
+* `name` - the name/key to lookup
+* `type` - the type
+* `default` - the default value
+* `first_found` - an array of names/keys, tried in order until one has a value. May not be combined 
+  with specifying `name`.
+* `accept_undef` - whether an undefined lookup is an error or not if the lookup found no value, and 
+  there is no default value.
+
     
 Wiring all the Modules
 -----
