@@ -157,6 +157,8 @@ The attributes are:
   elevated precedence based on the categories precedence (priority between highest and it's next 
   higher priority). (multiple categories is the same as nesting one when inside another, and the 
   listing all the bindings).
+* **bind**: - what to bind, same as for top bindings (Binding Hash, Conditional Bindings Hash)
+
   
   Example:
       
