@@ -401,6 +401,8 @@ Examples:
     Integer[]         # => Integer (null operation)
     
     Integer[1,3].each {|x| . . . }   # loop over result
+    
+    NOTE: final[] on fully qualified resource should give value of attribute. !!!    
 
 Assignment
 ----------
