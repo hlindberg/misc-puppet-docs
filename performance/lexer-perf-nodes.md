@@ -105,3 +105,85 @@ always call a method.
 A solution here, to avoid the tricky guards and blocks with convert logic would be to
 subclass Token for the small number of tokens that need special handling (now they are special
 in that calls have to be made to set them up with Procs etc.
+
+Testing the Assumptions
+---
+Nothing ever turn out as expected!
+
+A new implementation was made where three distinct and specialized implementation were made for Ruby18, Ruby19 and Ruby20. The Ruby20 impl use bsearch, and asked for the character position from the scanner using char_pos.
+
+Since Ruby20 Array.bsearch returns the value and not the index, an additional structure
+was needed to map found offset to line number.
+
+The first result showed that the Ruby20 was faster, but not much. The Ruby18 implementation was almost 2x as slow (6.4 sec vs 11.1).
+
+### Using a bsearch in ruby
+
+A bsearch in ruby was then added. This implementation is specialized to search the line index, and returns the index instead of the value.
+
+This speeded up the Ruby18 and Ruby19 implementations. In fact, they were now faster than the Ruby20 with a C implementation of bsearch. This probably because of the additional structure + the fact that it requires a block to be passed, and the block to be called for each value.
+
+When switching also the Ruby20 implementation to using the special bsearch is was again at par with Ruby19. (Ruby18 reduced time from 11.1 to 9.7sec).
+
+### Using scanner.charpos vs scanner.pos + bytslice
+
+The scanner.charpos does not do a great job. The implementation using byteslice and offsets
+is actually faster (Ruby20 went from 5.6 sec to 5.2 sec when using the implementation for Ruby19).
+
+### Avoiding calculation
+
+Avoiding calculation of detailed positions, and instead pass the Locator in the token's value hash
+reduced the time about 12%. The "position in source" calls where also changes as an extra hash merge
+was performed instead of passing the value to the function producing the hash with location information. (Now called `positioned_value`) - it now takes 1.93% of the time spent in the lexer
+as opposed to 10-15%.
+
+New Profiling
+---
+Profiling again still shows `scan` as the most expensive (32% / 22% in self), followed by `munge_token` (14% / 6.82% in self), followed by find_token, `find_string_token`, and `find_regexp_token` (these will vary depending on what is being lexed).
+
+Additional Optimizations
+---
+### Comments
+Comments are post processed and then skipped. Single line comments are ripped of
+the leading '#', and Multiline comments are ripped of the enclosing /* */.
+
+Since the text is never used, comments can just be tossed.
+
+### Deprecated constructs
+
+Dashed variables are no longer supported. Since all regular expressions are visited before
+the string tokens are visited, the additional two tokens' regular expressions were always
+matched (for every token!)
+
+This gave the lexer an 11% boost 
+
+Lessons Learned
+---
+### Calling a method is expensive
+Using an accessor to access a instance variable is 5% more expensive that referencing it directly
+in Ruby20 (1.05 vs 1.11), and it is 40% !!! more expensive in Ruby19 (0.88 vs 1.30)
+
+### Hash lookup is faster than instance var
+It is faster to lookup a symbol in a hash that it is to lookup an instance variable.
+In Ruby19 0.78 vs 0.88, and in Ruby20 0.80 vs 1.05. Thus when more than one instance variable
+is used in a method it may be beneficial to instead storing them in a hash.
+
+The lexer has a `lexing_context` hash that is heavily used - and the thesis was that it may be faster to access individual instance variables. But this proved wrong. Instead, the best sequence may be
+to assign the instance variable to a local variable, and then do hash lookups on it.
+
+A quick test revealed that local variable assignment and dereference is a fraction more expensive,
+but are both faster than using an accessor. (This test may be different if there are other local
+variables, as initialization of a local scope may depend on there being variables or not. (Yes, if
+scope has other variables, the method of assigning to a local variable is 10% faster on access 3 times).
+
+By changing the scan method and using local variables for instance variables used multiple time
+an additional speedup was gained. 5.45 vs 5.05.
+
+### Inline regexp is faster than looked up
+
+It is faster to use an inline regular expression than one that is assigned to a constant.
+The difference in Ruby 2.0 is about 2%. In Ruby19 there is no difference. (Ruby20 is also 30% slower than Ruby 19).
+
+     Benchmark.measure {1000000.times { '0xffe' =~ /^0[xX][0-9A-Fa-f]+$/ }}
+
+Vary with pattern assigned to a variable and to a CONST.
