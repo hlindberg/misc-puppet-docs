@@ -33,3 +33,24 @@ model contains the base type `Fact`.
 
     end
     
+If the author of a fact want a more dynamic approach - say that users should be able to add their own keyed string data.
+
+    module MyModule::Facts < Facter::FacterModel
+    
+      class IpAddresses < Fact
+        contains_many_uni 'devices', NetDevice
+      end
+      
+      class NetDevice < Fact
+        has_attr 'name', String
+        has_attr 'ip', String
+        contains_many_uni 'data', CustomData
+      end
+
+      class CustomData
+        has_attr 'name', String
+        has_attr 'value', String
+      end
+    end
+
+This is the simples way, we could naturally make the CustomData handle different data types, we could also make all Facts support this (all other facts inherit the ability).
