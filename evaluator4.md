@@ -9,11 +9,12 @@ Literals
 * Single quoted string
 * Double quoted string - supports interpolation
 * Heredoc
+* Templates
 
 **TODO**
 
 * Heredoc support (and templates) - changes in lexer and grammar
-* Unicode support in strings (lexer needs to know \u) - requires Ruby 1.9
+* Unicode support in strings (lexer needs to know \u) - (requires Ruby 1.9, actually no)
 
 ### Numeric types
 
@@ -38,6 +39,10 @@ Literals
 * Names may not contain periods or hyphens.
 * The rules for Types is the same as for Name (except that each segment starts with an upper case
   letter)
+
+#### Class Name
+* A classname is a strict name
+* A class may not be named 'class' (as in 3.x)
 
 #### Hashes
 
@@ -472,6 +477,36 @@ TODO: Implement the functions
 
 String Interpolation
 --------------------
+The rules for interpolation has changed to remove corner cases. The following rules apply:
+
+* Any expression may be interpolated (except top level "statements" such as define and class)
+* Automatic conversion to a variable is performed if the expression is on one of the forms:
+  * `${<KEYWORD>}` - e.g. `${node}`, `${class}` becomes `${$node}`, `${$class}`
+  * `${<QualifiedName>}` - e.g. `${var}` becomes `${$var}`
+  * `${<Number>}` - e.g. `${0}` becomes `${$0}`
+* Automatic conversion is also performed in these cases but keywords must be written with
+  a preceding $:  
+  * `${<AccessExpression>}` - e.g. `${var[key]}`, `${var[key][key]}` becomes `${$var[key]}`,
+    `${$var[key][key]}`
+  * `${<MethodCall>}` - e.g. `${var.each ...}` becomes `${$var.each}`, which also works for the 
+    leftmost name in a sequence of method calls e.g. `${var.fee.foo}` becomes `${$var.fee.foo}`  
+* **In all other cases a name or number that should be interpreted as a variable must be
+  preceded with a `$`**
+  * `${if + 1}` - **error**, i.e. not $if + 1
+  * `${2 + 2}` - **is 4**, not $0 + 2
+  * `${x + 3}` - **error**, is 'x' + 3, not $x + 3 (error because + does not operate on String)
+  * `${if[2]}` - **error**, since `if` is a keyword and not alone (causes syntax error since an
+     if expression is allowed, but must have correct syntax e.g.
+     `${if true { 'always' } else { 'never' }}`
+
+The above rules are implemented in Lexer2, the optimized lexer.
+
+### Future Parser 3.x
+
+The future parser lexer in 3.x treated some keywords as special (in a different way).
+(If you are using
+the future parser on master as of this date (TODO: EDIT DEPENDING ON WHAT IS RELEASED in 3.4).
+
 The issue [#22593](http://projects.puppetlabs.com/issues/22593) screwed up ambitions to be
 able to use if, unless, case expressions in interpolations since the interpolator did the wrong
 thing for nested braces.
@@ -480,4 +515,6 @@ Now, the variables `$if`, `$unless`, `$undef`, `$true`, `$false`, and `$case` ha
 
     "$if"
     "${$if}"
+
+That is, if that should be legal at all.
 

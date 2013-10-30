@@ -187,3 +187,45 @@ The difference in Ruby 2.0 is about 2%. In Ruby19 there is no difference. (Ruby2
      Benchmark.measure {1000000.times { '0xffe' =~ /^0[xX][0-9A-Fa-f]+$/ }}
 
 Vary with pattern assigned to a variable and to a CONST.
+
+Lexer 2
+===
+After running out of obvious optimizations using the current lexer's structure it was time to try
+something else. How long would it take to rewrite the lexer using a conventional approach (sort
+of hand writing the typical output from a lexer generator)?
+
+It turned out not to take too long. After about 4 hours of Saturday coding everything except double
+quoted strings and interpolation worked. An additional 4 hours on Sunday, simplified and optimized
+interpolation also started to work.
+
+
+Is it any faster?
+---
+
+### The revised test
+
+The test was too simple as it had all the code on one line. Since a big drain on
+performance is keeping track of detailed positioning the same test was modified to
+contain new lines.
+
+    lexer = Puppet::Pops::Parser::Lexer.new
+    code = 'if true \n{\n 10 + 10\n }\n else\n {\n "interpolate ${foo} and stuff"\n }\n'
+    10000.times {lexer.string = code; lexer.fullscan }
+
+
+| Lexer                     | time (s) | normalized | factor (x)
+| -----                     | ----     | ---        | ---
+| Original Lexer            | 4.45     | 100        | 1
+| Future Parser Unoptimized | 6.13     | 138        | 0.7
+| Future Parser Optimized   | 4.52     | 101        | 1
+| Lexer2                    | 1.3      | 29         | 3.4
+
+On Ruby 2.0.0 there is a slight improvement in favor of Lexer2 (closer to 1.2 in average).
+
+On Ruby 1.8.7 the difference is much less
+
+| Lexer                     | time (s) | normalized | factor (x)
+| -----                     | ----     | ---        | ---
+| Original Lexer            | 7.7      | 100        | 1
+| Lexer2                    | 6.3      | 82         | 1.22
+
