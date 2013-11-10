@@ -9,7 +9,7 @@ To ease the merging, make these changes in the following order:
 * Remove alternative syntaxes for lambdas
 * Additional fixes/issues for future parser
 
-At this point, the --parser future can be relesed in 3.4 with evaluation using 3.x AST
+At this point, the --parser future can be released in 3.4 with evaluation using 3.x AST
 
 Future Evaluator:
 
