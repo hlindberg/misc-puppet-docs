@@ -378,7 +378,7 @@ Examples:
 
 TODO: REF TO TRUTHY
 
-Comparison Operators
+Equality and Comparison Operators
 ---
 ### Equality
 
@@ -487,27 +487,73 @@ A comparison operator converts the result to a Boolean.
 * All Numeric values are less than all String values
 * Only String and Numeric values can be compared
 
-### Assignment Operators
+### IN operator
 
-The assignment operators assign the RHS (or an assignment operation involving the RHS) to the L-Value produced by the LHS. A L-value is a name references to a slot in the current scope that can be referenced by a variable.
+The `in` operator tests if the LHS operand can be found in the RHS operand. Both LHS and RHS
+are evaluated before conducting the test. The result produces a Boolean indicating if the LHS
+was considered to be in the RHS.
 
-* A variable produces an L-value name
+* A search using regular expression does not affect the match variables $0-$n
+
+Syntax:
+
+    InExpression
+      : Expression 'in' Expression
+
+<table><tr><th>Note</th></tr>
+<tr><td>
+  The <code>in</code> operator in Puppet 3x is a mysterious beast, it does not use the puppet
+  rules for equality and results in paradoxes. It is also not very versatile (it allows searching
+  for a fixed substring in a string, but not a pattern, a not a substring in a collection
+  of strings/keys.
+</td></tr>
+<tr><th>T.B.Decided</th></tr>
+<tr><td>
+  The current implementation of 4x performs equality check with the same semantics as the
+  <code>==</code> operator (case insensitive). The 3x implementation does not (it is case sensitive).
+  If this should be changed, both should change to be strict (case sensitive).
+</td></tr></table>
+
+| LHS      | RHS    | Description
+| ---      | ---    | ---
+| String   | String | searches for the LHS string as a substring in RHS (LHS and RHS downcased), true if a substring is found.
+| Number   | String | is only true if the RHS coerced to number equals the number
+| Regexp   | String | true if the string matches the regexp ( =~ )
+| Type     | String | only true if the type is `String`, `Data`, or `Object` (rationale 'any substring of string is a string, and a string is also Data'
+| Any Other| String | false
+| Type     | Array  | true if there is an element that is an instance of the given type
+| Regexp   | Array  | true if there is an array element that matches the regexp (=~). Non string elements are skipped.
+| Any Other| Array  | true if there is an array element equal (==) to the LHS
+| Any      | Hash   | true if the LHS `in` the array of hash keys is true
+
+
+Assignment Operators
+---
+
+The assignment operators assign the RHS (or an assignment operation involving the RHS) to the L-Value produced by the LHS. An L-value is a name referring to a "slot" in the current scope (that can be referenced by a variable to obtain the value).
+
+* A `$` variable produces an L-value name
 * Only a simple name is accepted
-
+* Numerical L-values are not allowed (numerical variables are read only and set by side effect
+  of matching with a regular expression).
 
 ### = operator
 
 Assigns the evaluated RHS value to the given L-value name. The RHS value is produced as the
-result.
+result. Chained assignments are permitted.
+
+Examples:
+
+    $a = 10
+    $x = $y = 0
 
 ### += operator
 
 If the L-value name is a reference to a variable in an outer scope, the evaluated RHS
 value is concatenated/merged to the value of the outer scope variable and assigned to the L-value name. If the L-value name is not a reference to an outer scope variable the result is the same as if the regular assignment operator had been used.
 
-
 * The operation fails if the outer scope value is not an array or a hash, or if the corresponding
-  + concatenation operation fails (see '+' Concatenation).
+  `+` concatenation operation fails (see '+' Concatenation).
 * The produced result is the evaluated RHS
 
 ### -= operator
@@ -518,3 +564,437 @@ value is deleted from (a copy of) the value of the outer scope variable and assi
 * The operation fails if the outer scope value is not an array or a hash, or if the corresponding
   `-` (deletion) operation fails (see '-' Delete).
 * The produced result is the evaluated RHS
+
+[ ] Access Operator
+---
+The AccessExpression operator `[]` is one of the most versatile in the Puppet Programming
+language. It has different meaning depending on the type of the LHS operand.
+
+The grammar is:
+
+    AccessExpression
+     : Expression '[' Expression (',' Expression)* ']'
+     ;
+
+The arity of the list of expressions varies with the evaluated type of the LHS. The arity is
+never less than 1.
+
+The `[ ]` operator supports access to:
+
+* one or a range of elements from an Array
+* one or selection of keys from a Hash
+* a single character from a String
+* a range of characters (substring) from a String
+
+The `[ ]` operator supports creation of:
+
+* a regexp when applied to a Pattern type
+* a specialized type when applied to a more generic type
+* a collection of types (for certain types)
+* an array of integers given to, from, and optional step
+
+### Array []
+Accepts two signatures:
+
+    ArrayAccess
+      : SingleElementAccess | ElementRangeAccess
+      ;
+      
+    SingleElementAccess
+      : '[' Index ']'
+      ;
+      
+    ElementRangeAccess
+      : '[' From ',' To ']'
+      ;
+    Index: Expression ;
+    From: Expression ;
+    To: Expression ;
+    
+    [index]    # element at index
+    [from, to] # elements from index to index (inclusive)
+    
+* Keys (Index, From, To) must evaluate to Integer type
+* ElementRangeAccess From and To are inclusive
+* Negative indexes enumerate from the end, where -1 is the last element
+* Fewer than 1 and more than 2 keys generates an error.
+* SingleElementAccess produces the element at the given Index
+* ElementRangeAccess produces an Array including the range of elements
+
+Examples:
+
+    [1,2,3][2]      # => 2
+    [1,2,3,4][1,2]  # => [2,3]
+    [1,2,3][100]    # => nil
+    [1,2,3,4][-1]   # => 4
+    [1,2,3,4][2,-1] # => [3,4]
+
+
+### Hash []
+
+Signature:
+
+    HashElementAccess
+      : '[' Key (',' Key)* ']'
+      ;
+    Key : Expression ;
+
+* If a single key is given the result is the lookup of that key
+  * If the key does not exist, `undef` is produced.
+  * If the value entry is `undef`, `undef` is produced.
+* If multiple keys are given, the result is an array with the result of looking up each key
+* Non existing keys does not produce entries in the result.
+* Value entries that are `undef` does not produce entries in the result.
+* Fewer than 1 argument generates an error.
+
+Examples:
+
+    {'a'=>1, 'b'=>2, 'c'=>3}['b']         # => 2
+    {'a'=>1, 'b'=>2, 'c'=>3}['b', 'c']    # => [2, 3]
+    {'a'=>1, 'b'=>2, 'c'=>3}['x']         # => undef
+    {'a'=>1, 'b'=>2, 'c'=>3}['x', 'y']    # => []
+    {'a'=>1, 'b'=>2, 'c'=>3}['x', 'b']    # => [2]
+    
+Note that the result of using multiple keys results in a compacted array where all missing entries
+have been removed.
+
+### String []
+
+Access to characters in a string (a substring) have the same semantics as if the string
+was an array of the string's individual characters, put produces a string result instead of
+an array of single character strings.
+
+Examples:
+
+    "Hello World"[6]    # => "W"
+    "Hello World"[1,3]  # => "ell"
+    "Hello World"[6,-1] # => "World"
+
+    
+### Operation on Types
+### Pattern Type []
+
+Creates a regular expression from the given pattern.
+
+Signature:
+
+    PatternCreation
+      : 'Pattern' '[' StringExpression ']'
+      ;
+    StringExpression: Expression ;
+    
+* The StringExpression must evaluate to a String
+* The string pattern must be a valid regular expression
+* The string should not include the leading and trailing `/` used in a literal regular expression.
+
+Examples:
+
+    $pattern = Pattern['(f)(o)(o)']  # => /(f)(o)(o)/
+    'foo' =~ $pattern                # => true
+    notice $1                        # => 'o'
+
+#### Hash Type [ ]
+Specialized a Hash Type by producing a new type with parameters for key and value.
+
+* The keys must evaluate to types
+* One or two parameters may be given
+  * Fewer or more parameters raises an error
+* If one type is given the key type is set to Literal, and the value type to the given type
+* If two types are given, the key type is the first, and the value type the second
+* Note that an unparameterized Hash is really `Hash[Literal, Data]`
+
+Examples:
+
+    Hash[String]                     # => Hash[Literal, String] (type)
+    Hash[String, Integer]            # => Hash[String, Integer] (type)
+    $h = Hash[String]                # => Hash[Literal, String] (type)
+    $h[]                             # => error
+    $h[Integer]                      # => Hash[Literal, Integer] (type)
+
+    
+#### Array Type [ ]
+Specializes an Array Type by producing a new type with specific element type.
+
+* The key must evaluate to a type
+* One parameter may be given
+  * Fewer or more parameters raises an error
+* Note that an unparameterized Array is really `Array[Data]`.
+
+Examples:
+
+    Array                            # => Array[Data]
+    Array[String]                    # => Array[String] (type)
+    $a = Array[String]               # => Array[String] (type)
+    $a[]                             # => error
+    $a[Integer]                      # => Array[Integer] (type)
+    
+#### Class type
+Specializes a Class Type by producing a new type that refers to a particular class.
+
+* The key must evaluate to a String
+* One parameter may be given
+  * Fewer or more parameters raises an error
+
+Examples:
+
+    Class                            # => any class
+    Class[apache]                    # => Class[apache] (reference to the class 'apache')
+    Class[apache, nginx]             # => [Class[apache], Class[nginx]] (array of classes)
+    $c = Class[apache]               # => Class[apache]
+    $c[]                             # => error
+    
+**TODO**:
+The expression below when evaluated against a Resource results in lookup of the parameter
+value - the same should be done for a class. Also, use the same style of description as for
+Resource [] with forms, the Class has two typed (it is a resource of Class type), and reference.
+    
+    Class[apache][nginx]             # => error cannot make class more special
+    
+#### Resource Type [ ]
+
+Specializes a Resource Type by producing a new type that refers to a particular subtype
+of Resource, or a fully qualified instance of Resource, and when applied to a fully qualified 
+Resource the value of a parameter is produced.
+
+A Resource type has three forms:
+
+* *open* - Any Resource
+* *typed* - Specific resource type
+* *reference* - Specific resource instance reference
+
+These rules apply:
+
+* Accepts one or multiple keys
+  * When the form is *open*:
+    * The first key must evaluate to a Resource Type (type key)
+    * Subsequent (optional) reference keys must evaluate to String
+    * Produces a single type when there are fewer than 2 reference keys, and an array of types otherwise
+  * When the form is *typed*:
+    * The keys are reference keys and must evaluate to String
+    * Produces a single type when there are fewer than 2 reference keys, and an array of types otherwise
+  * When the form is *reference*:
+    * The keys are references to the parameters of the referenced resource and must evaluate to String.
+    * Produces a single value when there is a single key, and an array of values otherwise
+
+* In all forms, an error is raised if there are no keys.
+
+Examples:
+
+    Resource                           # => any resource type
+    Resource[File]                     # => File
+    Resource[File, '/tmp/x']           # => File['/tmp/x']
+    Resource[File]['/tmp/x']           # => File['/tmp/x']
+    Resource[File, '/tmp/x', '/tmp/y]  # => [File['/tmp/x'], File['/tmp/y']]
+    File                               # => File
+    File['/tmp/x']                     # => File['/tmp/x']
+    File['/tmp/x', '/tmp/y']           # => [File['/tmp/x'], File['/tmp/y']]
+    
+    File['/tmp/x'][mode]               # => the value of the file /tmp/x's mode parameter
+    
+The left hand type can be specialized, Resource to a specific type of resource, and a typed resource to a specific (titled) resource.
+
+#### Integer Type [ ]
+Produces an array of integers in the given range from, to with an optional step.
+
+* Accepts 2 or three keys
+* Keys must evaluate to Integer
+* The first key is the start value
+* The second key is the end value (inclusive unless stepped over)
+* If the second key is smaller than the first key the direction the result is in decending order
+* The step may not be negative
+
+Examples:
+
+    Integer[1,3]      # => [1,2,3]
+    Integer[3,1]      # => [3.2,1]
+    Integer[1,6,2]    # => [1,3,5]
+    Integer[6,1,2]    # => [6,4,2]
+    Integer[1]        # => error
+    Integer[]         # => error
+    
+    Integer[1,3].each {|x| . . . }   # loop over result
+    
+**TODO: Note that this serves as an expensive replacement for Range. A proper range implementation would be better.**
+  
+Function Calls
+---
+
+Conditional Expressions
+---
+The conditional expressions are R-Value Expressions.
+
+### if (elsif, else) expression
+
+Syntax:
+
+    IfExpression
+      : 'if' IfPart
+      ;
+      
+    IfPart
+      : TestExpression '{' Statements? '}' ElsePart? 
+      ;
+      
+    ElsePart
+      : 'elsif' IfPart
+      | 'else' '{' Statements? '}'
+      ;
+      
+    TestExpression : Expression ;  
+
+The TestExpression is evaluated, and if thruty the IfPart Statements are evaluated,
+else the ElsePart. If the ElsePart is an IfPart the evaluation recurses until either an
+IfPart is evaluated, an unconditional ElsePart is evaluated (if one exists).
+
+* The last evaluated expression in the selected expression block is produced as a result
+* If all conditionals evaluated to false, and there was no else part, the produced result is `undef`.
+
+### unless (else) expression
+
+Undef is the equivalence of `if !(TestExpression)`, but does not have an 'elsif' or 'elsunless' part.
+
+Syntax:
+
+    UnlessExpression
+      : 'unless' TestExpression '{' Statements? '}' ('else' '{' Statements? '}')?
+      ;
+      
+    TestExpression : Expression ;  
+
+
+### case expression
+
+A case expression tests a  value Expression against a series of propositions. The first matching
+proposition triggers the evaluation of an associated set of statements. If no matching proposition
+exists, a default proposition is selected if one exists.
+
+Syntax:
+
+    CaseExpression
+      : 'case' Expression '{' Propositions? '}'
+      ;
+      
+    Propositions
+      : Option (',' Option)* ':' '{' Statements? '}'
+      ;
+      
+    Option
+      : Expression
+      | 'default'
+      ;
+
+* the case expression is evaluated first
+* an option is evaluated before a match is performed      
+* A match is computed as:
+  * if the option is a Regular Expression the value must be a string for the match to trigger
+  * if the option is a Type and the value is not the option matches if the value is an instance of 
+    the type.
+  * in all other cases, the option matches if the value is equal (using operator `==` semantics)
+    to the option value.  
+* If one of the options match, the associated Statements are evaluated
+* The result of evaluating the last expression in the Statements is produced as result
+* If no matching options was found, and one option is the literal default, the Statements associated
+  with the Proposition with a default option is selected.
+* If no matching Statements were evaluated, the result is `undef`
+* The default may appear anywhere in the list of propositions
+  
+Examples:
+
+    case $observed {
+    
+      'cat', 'sylvester': { 
+        notice 'I taw a puddy cat'
+      }
+      
+      'seed': {
+        notice 'Feed me!'
+      }
+      
+      'toe': {
+        notice 'This widdle piddy went to market' 
+      }
+    }
+
+    notice case $name {
+    
+      'paul', 'ringo', 'george', 'john': { 
+        'The Beatles'
+       }
+       
+      'mick', 'keith', 'charlie', 'ronnie': {
+        'The Rolling Stones'
+      }
+      default: { 'Some other band' }
+    }
+
+### ? (selector) expression
+
+Matches a LHS expression against a sequence of propositions. The value expression associated
+with the matching option expression is evaluated and produced as the result.
+
+Syntax:
+
+    SelectorExpression
+      : Expression '?' (Proposition | Propositions)
+      ;
+      
+    Proposition
+      : Option '=>' Value
+      ;
+      
+    Propositions
+      : '{' Proposition (',' Proposition)* ','? '}'
+      ;
+      
+    Option: Expression ;
+    Value: Expression ;
+
+* The selector expression is evaluated first
+* the Option expressions are processed from top to bottom
+  * the option expression is evaluated
+  * The proposition matches if the option is the literal `default`, or if the option
+    matches using the same match semantics as case proposition
+  * The result of the value expression is the result of the selector expression if the proposition
+    was matched.
+* If no match was found, the result of the selector expression is `undef`. 
+
+Example:
+
+    # Ex 1.
+    $x = $y ? sad => blue
+    # the same as
+    $x = if $y == sad { blue }
+    
+    # Ex 2.
+    $x = $y ? {
+      hot     => red,
+      sad     => blue,
+      seasick => green,
+      default => normal,
+    }
+    # The same as
+    $x = case $y {
+      hot: { red }
+      sad: { blue }
+      seasick: { green }
+      default: { normal }
+    }
+    
+
+
+Catalog Expressions
+---
+Catalog Expressions are those that more directly relate to the content of the catalog produced
+by the compilation of a Puppet Program.
+
+* Node Definition - associates the logic producing a particular catalog with the node making 
+  a request for a catalog.
+* Class Definition - creates a grouping of resources
+* Resource Type Definition - creates a new (User) Resource Type
+* Resource Expression - creates resources
+* Resource Default Expression - sets default values for resources
+* Resource Override Expression - sets
+* Relationship operators - orders the entries in the catalog
+
+This chapter focuses on the syntactic aspects of these expressions. There are additional semantic rules, rules specific per type (extensible set), evaluation order semantics, as well as semantics for
+catalog application that are covered in a separate chapter. (TODO: REF TO THIS CHAPTER).
