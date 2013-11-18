@@ -15,15 +15,15 @@ the underlying runtime "platform" language - the *Platform Types*. There is also
 At present, the only existing implementation of the
 Puppet Language is written in Ruby, but there may be other implementations in the future. In general,
 the ability to refer to platform types is to allow configuration of a runtime, handle
-references to concepts such as plugins. Regular Programs in the Puppet Programming Language
-do not make use of the platform types.
+references to concepts such as plugins. **Regular Programs in the Puppet Programming Language
+do not make use of the platform types**.
 
 A Platform type is named after the runtime; currently only `Ruby`. It is a *Parameterized Type* where
-the type parameter is a reference to the *type name in the platforms type system* encoded as puppet string.
+the type parameter is a reference to the *type name in the platforms type system* encoded as a Puppet String.
 
 <table><tr><th>Note</th></tr>
 <tr><td>
-  The platform type names <code>Jvm</code>, <code>`C`</code>, and <code>`Go`</code> are reserved
+  The platform type names <code>Jvm</code>, <code>C</code>, and <code>Go</code> are reserved
   for potential future use.
 </td></tr>
 </table>
@@ -31,8 +31,10 @@ the type parameter is a reference to the *type name in the platforms type system
 As an example, if there is a puppet extension written in Ruby with the name `Puppetx::MyModule::MyClass`, the platform type is `Ruby['Puppetx::MyModule::MyClass']`.
 
 ## The Undef Type
-There is a third special undefined/null/nil type - called `Undef` the type of the expression `undef`.
+There is a special undefined/null/nil type - called `Undef`; the type of the expression `undef`.
 Values of the `Undef` type can always undergo a widening reference conversion to any other type. The reverse is however not true; only the value `undef` has the type `Undef`.
+
+A value of `Undef` type is assignable to any other type with the meaning *without value*.
 
 <table><tr><th>Note</th></tr>
 <tr><td>
@@ -44,8 +46,8 @@ Values of the `Undef` type can always undergo a widening reference conversion to
 ## Puppet Types
 
 Puppet Types include the types that are meaningful in a Puppet Program - these are divided into
-*Data Types* (e.g. `Integer`, `String`, and `Array`), *Catalog Types* (e.g. `Resource`, `Class`), and *Abstract Types* (e.g. `Collection`; the parent type of `Array` and `Hash`, `CatalogEntry`; the parent type of all types
-that are included in a *Puppet Catalog*, and the type `Data`; the parent type of all kinds of data types).
+*Data Types* (e.g. `Integer`, `String`, and `Array`), *Catalog Types* (e.g. `Resource`, `Class`), and *Abstract Types* (e.g. `Collection`; the parent type of `Array` and `Hash`, `Literal`; the parent type of all literal data types (`Integer`, `Float`, `String`, `Boolean`),
+`CatalogEntry`; the parent type of all types that are included in a *Puppet Catalog*, and the type `Data`; a parent type of all kinds of general purpose "data" (`Literal` and `Array` of `Data`, and `Hash` with `Literal` key and `Data` values).
 
 All types (Platform and Puppet) are organized into one *Type System*.
 
@@ -54,9 +56,12 @@ The Type System
 
 The type system contains both concrete types; `Integer`, `Float`, `Boolean`, `String`, `Pattern` (regular expression pattern),
 `Array`, `Hash`, and `Ruby` (represents a type in the Ruby type system - i.e. a Class), as well as abstract
-types `Literal`, `Data`, `Collection`, and `Object`. The `Array` and `Hash` types
-are parameterized, `Array[V]`, and `Hash[K,V]`, where if `K` is omitted, it defaults to `Literal`, and if `V` is omitted,
-it defaults to `Data`.
+types `Literal`, `Data`, `Collection`, and `Object`. 
+
+The `Array` and `Hash` types are parameterized, `Array[V]`, and `Hash[K,V]`, where if `K` is omitted, it defaults to `Literal`, and if `V` is omitted, it defaults to `Data`.
+
+The Integer type is also parameterized to enable integer range as a type. By default, an Integer
+represents all integral number +/- infinity. (See Integer for more information).
 
 The `Ruby` type (i.e. representing a Ruby class not represented by any of the other types) does not have much
 value in puppet manifests but is valuable when describing bindings of puppet extensions.
@@ -69,9 +74,9 @@ The abstract types are:
 - `Collection` - any `Array` or `Hash`
 - `Object` - any type
 
-The type hierarchy is shown in the figure below. A single capital letter denotes a 
+The type hierarchy is shown in the figure below. (A single capital letter denotes a 
 reference to a type, lower case type parameters have special processing rules as shown
-in section specific to each type. Note that parameterized type may be referenced
+in section specific to each type). Note that parameterized type may be referenced
 without any parameters, in which case type specific rules apply. Also note that the same type
 may appear more than once in the hierarchy, typically with different narrower type parameters.
 
@@ -89,7 +94,8 @@ may appear more than once in the hierarchy, typically with different narrower ty
        |
        |- Literal
        |  |- Numeric
-       |  |  |- Integer
+       |  |  |- Integer[from, to]
+       |  |  |  |- (Integer with range inside another Integer)
        |  |  |- Float
        |  |- String
        |  |- Boolean
@@ -107,23 +113,23 @@ may appear more than once in the hierarchy, typically with different narrower ty
 In addition to these types, a Qualified Reference that does not represent any of the other types is interpreted as `Resource[the_qualified_ref]` (e.g. `File` is shorthand notation for `Resource[File]`).
           
           
-(Node, and Stage are not yet implemented)
+TODO: (Node, and Stage are not yet implemented. Ruby and Type are reserved but not functional)
 
 Runtime Types
 ---
 
 An implementation of the Puppet Language is allowed to make efficient use of the underlying
-type system and may choose to represent instances of puppet types using instances of types
+runtime and may choose to represent instances of puppet types using
+instances of types
 in the platform language's type system. In these cases, it is allowed to map these types
 directly to the puppet type system.
 
-As an example, the Ruby implementation of the Puppet Programming Language uses the Ruby classes `String`, `Integer` (`FixNum`, etc), `Float`, `Hash`, `Array`, `Regexp`, `TrueClass`, `FalseClass`, `NilObj`. Instances of these Ruby types are directly mapped to the corresponding puppet types (e.g. even if an instance of a puppet `String` is an instance of the Ruby class called `String`, it is not interpreted as `Ruby[String]`.
+As an example, the Ruby implementation of the Puppet Programming Language uses the Ruby classes `String`, `Integer` (`Fixnum`, `Bignum`, etc), `Float`, `Hash`, `Array`, `Regexp`, `TrueClass`, `FalseClass`, `NilObj`. Instances of these Ruby types are directly mapped to the corresponding puppet types (e.g. even if an instance of a puppet `String` is an instance of the Ruby class called `String`, it is not interpreted as `Ruby[String]`.
 
 ### Ruby[T]
 
 Represents a type in the platform's type system. The type parameter T may not be omitted and
-must be a String having a valid string representation of the type. The referenced type does
-not have to exist; it is still a reference to a type (albeit a currently not existing type).
+must be of `String` type and contain a valid string representation of the Ruby type. The referenced type does not have to exist; it is still a reference to a type (albeit a currently not existing type). The type must exist when operations are performed on the type (i.e. must be loadable).
 
 ### Object
 
@@ -138,7 +144,7 @@ Values of the `Undef` type can always undergo a widening reference conversion to
 
 ### Data
 
-Represents the abstract notion of "data", its subtypes are `Literal`, and `Array[Data]`, or
+Represents the abstract notion of "data", its subtypes are `Literal`, and `Array[Data]` or
 `Hash[Literal, Data]`.
 
 ### Literal
@@ -150,9 +156,9 @@ Represents the abstract notion of "value", its subtypes are `Numeric`, `String`,
 
 Represents the abstract notion of "number", its subtypes are `Integer`, and `Float`.
 
-### Integer
+### Integer ([from, to])
 
-Represents an integral numeric value. 
+Represents a range of integral numeric value. The default is the range +/- infinity.
 
 There is no theoretical limit to the smallest or largest number that can be represented
 as an implementation should transparently represent the value as either a 32 or 64 bit
@@ -160,10 +166,56 @@ machine word, or as a *bignum*. There is a practical limit; while a bignum can g
 infinite size, computer scientist has yet to invent a computer with infinite amounts of
 memory.
 
+The Integer type can optionally be parameterized with `from`, `to` values to provide a range.
+The range can be *ascending* or *descending*. (The direction is only important when iterating
+over the set of instances).
+
+If `from` is unassigned, the default is -infinity, and if `to` is unassigned, the default is +infinity.
+From the Puppet Language, the default values are set by using a `LiteralDefault`. If only one
+parameter is given, it is taken as both `from` and `to`, (thus producing a range of one value).
+The `from` and `to` are inclusive.
+
+Examples:
+
+     Integer[0, default]   # All positive (or 0) integers
+     Integer[1, default]   # All positive integers
+     Integer[default, 0]   # All negative (or 0) integers
+     Integer[default, -1]  # All negative integers
+
+When performing tests in the Puppet Programming Language, a range inside of another is
+considered to be less than the wider range (i.e. a subset of). They are equal if, and only
+if the lower and upper bounds are equal.
+
+     Integer[1,10] > Integer[2,3]   # => true
+     Integer[1,10] == Integer[2,3]  # => false (they are not equal)
+     Integer[1,10] > Integer[0,5]   # => false (overlap)
+     Integer[1,10] > Integer[1,10]  # => false (not a subset, they are equal)
+     Integer[1,10] >= Integer[1,10] # => true (they are equal)
+     Integer[1,10] == Integer[1,10] # => true (they are equal)
+     
+Testing value against range:
+
+     $value =~ Integer[1,10]
+     
+     $value ? { Integer[1,10] => true }
+
+     case $value {
+       Integer[1,10] : { true }
+     }
+          
+Iterating over an integer range:
+
+     Integer[1,5].each |$x| { notice $x } # => notices 1,2,3,4,5
+     Integer[5,1].each |$x| { notice $x } # => notices 5,4,3,2,1
+     
+     Integer[0,default].each |$x| { notice $x } # error, unbound range (infinite)
+
 ### Float
 
 Represents an *inexact* real number using the native architecture's double precision floating
 point representation.
+
+Learn more about floating point than you ever want to know from these articles:
 
 * docs.sun.com/source/806-3568/ncg_goldberg.html
 * wiki.github.com/rdp/ruby_tutorials_core/ruby-talk-faq#wiki-floats_imprecise

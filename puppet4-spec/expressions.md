@@ -418,15 +418,22 @@ The logical reverse of the == operator. The same as evaluating `!(LHS == RHS)`.
 #### =~ match operator
 
 Tests if the LHS matches the RHS regular expression, and returns a Boolean result. As a
-side effect the variables $0-$n is set with the matches produced.
+side effect when the RHS is a Regular Expression or a String, the variables $0-$n is set with the produces matches.
+
+When the RHS is a type:
+
+* If the RHS is a type, the match is true if the LHS is an instance of the type (no match
+  variables are set in this case).
+
+When the RHS is not a type:
 
 * If the RHS evaluates to a String a new Regular Expression is crated with the string value
   as its pattern.
 * If the RHS is not a Regular Expression (after String conversion) an error is raised.
 * If the LHS is not a String an error is raised. (Note, Numeric values are not coerced to
   String automatically because of unknown radix).
-  
-The numeric variables $0-$n are set as follows:
+
+The numeric variables $0-$n are set as follows when RHS is not a type:
 
 * $0 represents the entire matched (sub-) string
 * $1 represents the first (leftmost) capture group
@@ -456,16 +463,22 @@ Example:
 
     $x = abc =~ /(a)b(c)/
     # $0 == 'abc', $1 == 'a', $2 == 'c' (until end of block)
+    
+Example:
 
-The setting of match variables is also covered per expression that introduces conditional blocks (if,
-elsif, case and selector).
+    [1,2,3] =~ Array[Integer]          # => true
+    [1,999,5] =~ Array[Integer[1,10]]  # => false (one value > 10)
+
+The setting of match variables is also covered per expression that introduces conditional
+blocks (`if`, `elsif`, `case` and `? { }` (selector)).
 
 
 #### !~ match operator
 
-Tests if the LHS does not match the RHS and returns a `Boolean` result. This is the same as evaluating `! (LHS =~ RHS)`. The numerical match variables are set as a side effect.
+Tests if the LHS does not match the RHS and returns a `Boolean` result. This is the same as evaluating `! (LHS =~ RHS)`. The numerical match variables are set as a side effect if the RHS
+is not a type.
 
-See =~ operator for detail.
+See `=~` operator for detail.
 
 ### <, >, <=, >=, comparison operators
 
@@ -482,15 +495,28 @@ A comparison operator converts the result to a Boolean.
 
 #### Comparison Semantics per type
 
-* If both LHS and RHS are coercible to Numeric the comparison is based on the numeric values
+* If both LHS and RHS are coercible to `Numeric` the comparison is based on the numeric values
 * Comparisons of strings is case independent
-* All Numeric values are less than all String values
-* Only String and Numeric values can be compared
+* All `Numeric` values are less than all `String` values
+* It is possible to compare:
+  * Strings with Strings
+  * Numeric with Numeric (or with strings in numeric form)
+  * Numeric with String (or vice versa)
+  * Type with Type
+* It is not possible to compare:
+  * instances of Array and Hash (except for equality)
+  * instance with Type
+
+Comparison involving type:
+
+* A type T is considered larger than (`>`) another type Q, if T is a wider (more general)
+  type. e.g. `Object > Integer` is true.
+* A type T is equal to another type Q if they describe the exact same type
 
 ### IN operator
 
 The `in` operator tests if the LHS operand can be found in the RHS operand. Both LHS and RHS
-are evaluated before conducting the test. The result produces a Boolean indicating if the LHS
+are evaluated before conducting the test. The result produces a `Boolean` indicating if the LHS
 was considered to be in the RHS.
 
 * A search using regular expression does not affect the match variables $0-$n
@@ -536,6 +562,7 @@ The assignment operators assign the RHS (or an assignment operation involving th
 * Only a simple name is accepted
 * Numerical L-values are not allowed (numerical variables are read only and set by side effect
   of matching with a regular expression).
+* Assignment is an R-value
 
 ### = operator
 
@@ -555,6 +582,15 @@ value is concatenated/merged to the value of the outer scope variable and assign
 * The operation fails if the outer scope value is not an array or a hash, or if the corresponding
   `+` concatenation operation fails (see '+' Concatenation).
 * The produced result is the evaluated RHS
+
+<table>
+<tr><th>T.B.Decided</th></tr>
+<tr><td>
+  Should the append (and also the delete operator) below silently ignore if an outer scope
+  variable does not access - i.e. when there is nothing to append to? The rationale is
+  that the logic $a = $a + [1,2,3] would fail where $a += [1,2,3] does not and this is
+  inconsistent (that is if 4x becomes strict wrt. variable references).
+</td></tr></table>
 
 ### -= operator
 
@@ -581,19 +617,18 @@ never less than 1.
 
 The `[ ]` operator supports access to:
 
-* one or a range of elements from an Array
-* one or selection of keys from a Hash
-* a single character from a String
-* a range of characters (substring) from a String
+* one or a range of elements from an `Array`
+* one or selection of keys from a `Hash`
+* a single character from a `String`
+* a range of characters (substring) from a `String`
 
 The `[ ]` operator supports creation of:
 
 * a regexp when applied to a Pattern type
-* a specialized type when applied to a more generic type
+* a specialized (parameterized) type when applied to a more generic type
 * a collection of types (for certain types)
-* an array of integers given to, from, and optional step
 
-### Array []
+### Array Value []
 Accepts two signatures:
 
     ArrayAccess
@@ -630,7 +665,7 @@ Examples:
     [1,2,3,4][2,-1] # => [3,4]
 
 
-### Hash []
+### Hash Value []
 
 Signature:
 
@@ -658,7 +693,7 @@ Examples:
 Note that the result of using multiple keys results in a compacted array where all missing entries
 have been removed.
 
-### String []
+### String Value []
 
 Access to characters in a string (a substring) have the same semantics as if the string
 was an array of the string's individual characters, put produces a string result instead of
@@ -694,6 +729,7 @@ Examples:
     notice $1                        # => 'o'
 
 #### Hash Type [ ]
+
 Specialized a Hash Type by producing a new type with parameters for key and value.
 
 * The keys must evaluate to types
@@ -713,6 +749,7 @@ Examples:
 
     
 #### Array Type [ ]
+
 Specializes an Array Type by producing a new type with specific element type.
 
 * The key must evaluate to a type
@@ -729,6 +766,7 @@ Examples:
     $a[Integer]                      # => Array[Integer] (type)
     
 #### Class type
+
 Specializes a Class Type by producing a new type that refers to a particular class.
 
 * The key must evaluate to a String
@@ -794,30 +832,150 @@ Examples:
 The left hand type can be specialized, Resource to a specific type of resource, and a typed resource to a specific (titled) resource.
 
 #### Integer Type [ ]
-Produces an array of integers in the given range from, to with an optional step.
 
-* Accepts 2 or three keys
-* Keys must evaluate to Integer
-* The first key is the start value
-* The second key is the end value (inclusive unless stepped over)
-* If the second key is smaller than the first key the direction the result is in decending order
-* The step may not be negative
+Produces an Integer type with a range. An Integer type has the default range -Infinity to +Infinity.
+An Integer range where one or both ends is Infinity is said to be an *open range*, else it is a
+*closed range*. The set of values in the range is inclusive of the given values (theoretically
+not in an open range since though). It is possible to iterate over the values in a closed
+range. The range can be described as an ascending or defending range (the values in the set are
+the same, but the order is different).
+
+Signature:
+
+    Integer[exact]
+    Integer[from, to]
+
+* Accepts one or two keys
+* Keys must evaluate to an Integer, or to literal `default`
+* A value of default means -Infinity if given as the value of `from`, and +Infinity if given
+  as `to`.
+* The `from` value may be > than the `to` value
+* If the to key is smaller than the first key the direction the result is in descending order
 
 Examples:
 
-    Integer[1,3]      # => [1,2,3]
-    Integer[3,1]      # => [3.2,1]
-    Integer[1,6,2]    # => [1,3,5]
-    Integer[6,1,2]    # => [6,4,2]
-    Integer[1]        # => error
-    Integer[]         # => error
+    Integer[2]        # the exact value 2
+    Integer[1,3]      # values 1-3 inclusive
+    Integer[3,1]      # values 3-1 inclusive
     
-    Integer[1,3].each {|x| . . . }   # loop over result
+    Integer[1,3].each {|x| . . . }   # iterate over 1,2,3
     
-**TODO: Note that this serves as an expensive replacement for Range. A proper range implementation would be better.**
+<table><tr><th>Note</th></tr>
+<tr><td>
+  It is the type that represents a range and values are created on demand when iterating
+  (no array is generated).
+</td></tr>
+</table>
+
   
 Function Calls
 ---
+The Puppet Programming Language supports calling functions. In this revision of the language, it is not possible to create/define new functions in the Puppet Programming Language - they are instead written as plugins.
+ 
+Function calls come in three forms:
+
+* *statement* - arguments to the function does not require parentheses, may not appear in
+  expressions
+* *prefix* - name is first, arguments are given in parentheses
+* *postfix* - name follows the first argument followed by a `.` (period), and additional
+  arguments in parentheses.
+  
+Syntax:
+
+    StatementStyleCall
+      : QualifiedName Expression (',' Expression)*
+      ;
+      
+    PrefixStyleCall
+      : QualifiedName '(' Expression (',' Expression)* ','? ')' LambdaExpression?
+      ;
+      
+    PostfixStyleCall
+       : Expression '.' QualifiedName ('(' Expression (',' Expression)* ','? ')')? LambdaExpression?
+       ;
+     
+    LambdaExpression
+      : '|' ParameterList? '|' '{' Statements? '}'
+      ;
+      
+    ParameterList
+      : ParameterDeclaration (',' ParameterDeclaration)* ','?
+      ;
+      
+    ParameterDeclaration
+      : VariableExpression ('=' Expression)?
+      ;
+    
+    VariableExpression : VARIABLE ;
+      
+
+**General**:
+
+* In 4x the QualifiedName function name must be a simple name (all functions are in the same 
+  namespace).
+* A function may be invoked using any of the three styles - there is no difference in
+  evaluation between them - only syntactical differences, and the varying support for
+  calls without no arguments, and passing an optional lambda.
+* Functions that are declared to be R-Value produce a value, those that that are declared to
+  be statements produce `undef` as their result.
+* A function call is never an L-value (a function can not produce something that is assignable)
+  
+**Statement Style**:
+
+* StatementStyleCall may only appear at top level in a file, or in a block (i.e. the body
+  of a CaseProposition, the conditional blocks for `if`, `unless`, `else`, `elsif`, the blocks
+  constituting the body of `class` and `define` expressions.
+* As shown in the grammar above, a StatementStyleCall requires an argument; a call without
+  arguments requires use of one of the other two styles.
+* A function implementation may invoke the lambda that is given to it, but it may not use it after 
+  the function has returned (and it may not return the lambda)
+  
+Example:
+
+    require 'myclass'
+
+**Prefix Style**:
+
+* Requires parentheses around the 0-n arguments
+* Accepts an optional lambda
+* May appear anywhere where an Expression can appear
+
+Example:
+
+    require('myclass')
+    $pi = sprintf("%.4f", 3.1415123)     # => '3.1415'
+    map([1,2,3]) {|$x| $x * 10 }         # => [10, 20, 30]
+
+**Postfix Style**
+
+* Accepts call without arguments to leave out the parentheses around (the empty) argument list
+* The LHS of the `'.'` operator is given to the function as the first argument (argument 0)
+* Any additional arguments (given within parentheses) are given to the function as argument 1-n)
+* Parentheses are required around additional arguments
+* Accepts an optional lambda after the (optional) argument list
+
+Examples:
+
+    [1,2,3].map {|$x| $x * 10 }                                   # => [10, 20, 30]
+    [1,2,3].reduce(10) {|$memo, $x| $memo + $x }                  # => 16
+    'myclass'.require                                             # => undef
+    [1,2,3].map {|$x| $x * 10 }.reduce {|$memo, $x| $memo + $x }  # => 60
+    
+**Lambda**:
+  
+* A Lambda is a unnamed function, it has an optional ParameterList that declares the name
+  and an optional default value expression if too few arguments are given.
+* Parameter declarations with default value expressions must come after parameter declarations 
+  without default value expressions.
+* Evaluation of default value expressions take place in the scope where the lambda is declared.
+
+<table><tr><th>Future</th></tr>
+<tr><td>
+  A future version may allow functions to be named in a name space, thus relaxing the
+  requirement that a function name must be a simple name. A future version may also make
+  lambdas and named functions available in the Puppet Programming Language.
+</td></tr>
+</table>
 
 Conditional Expressions
 ---
@@ -887,7 +1045,7 @@ Syntax:
 * an option is evaluated before a match is performed      
 * A match is computed as:
   * if the option is a Regular Expression the value must be a string for the match to trigger
-  * if the option is a Type and the value is not the option matches if the value is an instance of 
+  * if the option is a Type and the value is not, the option matches if the value is an instance of 
     the type.
   * in all other cases, the option matches if the value is equal (using operator `==` semantics)
     to the option value.  
@@ -950,13 +1108,13 @@ Syntax:
     Value: Expression ;
 
 * The selector expression is evaluated first
-* the Option expressions are processed from top to bottom
-  * the option expression is evaluated
-  * The proposition matches if the option is the literal `default`, or if the option
-    matches using the same match semantics as case proposition
-  * The result of the value expression is the result of the selector expression if the proposition
+* the Proposition expressions are processed from top to bottom
+  * the Option expression is evaluated
+  * The proposition matches if the Option is the literal `default`, or if the Option
+    matches using the same match semantics as for case expression propositions
+  * The result of the SelectorExpression is the result of the Value expression if the Proposition
     was matched.
-* If no match was found, the result of the selector expression is `undef`. 
+* If no match was found, the result of the SelectorExpression is `undef`. 
 
 Example:
 
@@ -980,21 +1138,3 @@ Example:
       default: { normal }
     }
     
-
-
-Catalog Expressions
----
-Catalog Expressions are those that more directly relate to the content of the catalog produced
-by the compilation of a Puppet Program.
-
-* Node Definition - associates the logic producing a particular catalog with the node making 
-  a request for a catalog.
-* Class Definition - creates a grouping of resources
-* Resource Type Definition - creates a new (User) Resource Type
-* Resource Expression - creates resources
-* Resource Default Expression - sets default values for resources
-* Resource Override Expression - sets
-* Relationship operators - orders the entries in the catalog
-
-This chapter focuses on the syntactic aspects of these expressions. There are additional semantic rules, rules specific per type (extensible set), evaluation order semantics, as well as semantics for
-catalog application that are covered in a separate chapter. (TODO: REF TO THIS CHAPTER).
