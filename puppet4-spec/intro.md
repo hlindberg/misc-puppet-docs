@@ -33,6 +33,13 @@ following syntax and semantics:
 | &#124; | or
 | /re/   | a regular expression as defined by Ruby 2.0
 | ;      | rule end
+| sym =  | symbolic naming of rule to the right
+| sym += | symbolic naming of array containing iterative values from rule on right
+| rule&lt;Type&gt; | A rule that when evaluated produces the given (runtime type)
+| rule &lt;Type&gt;: | A type safe rule that when evaluated produces the given (runtime type)
+
+The presence of `sym=` and `sym+=` does not alter the grammar, they only provide notation to
+be able to refer to the various parts of the rule with symbolic names.
 
 ### Examples
 ```
@@ -40,4 +47,15 @@ Hello: 'h' 'e' 'l' 'l' 'o' ;
 Hi: 'h' 'i' ;
 NAME: /[A-Za-z]+/ ;
 Greeting: (Hello | Hi ) NAME '!'?;
+
+StringAccess
+  : Expression<String> '[' from = Int (',' to = Int)? ']'
+  ;
+
+Int <Integer> : Expression ;
+  
+ASequenceOfNames
+  : (names += NAME)+
+  ;
+  
 ```

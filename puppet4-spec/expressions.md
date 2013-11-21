@@ -636,33 +636,42 @@ Accepts two signatures:
       ;
       
     SingleElementAccess
-      : '[' Index ']'
+      : '[' index = Index ']'
       ;
       
     ElementRangeAccess
-      : '[' From ',' To ']'
+      : '[' index = Index ',' count = Index ']'
       ;
-    Index: Expression ;
-    From: Expression ;
-    To: Expression ;
+
+    Index <Integer>: Expression ;
     
-    [index]    # element at index
-    [from, to] # elements from index to index (inclusive)
-    
-* Keys (Index, From, To) must evaluate to Integer type
-* ElementRangeAccess From and To are inclusive
-* Negative indexes enumerate from the end, where -1 is the last element
-* Fewer than 1 and more than 2 keys generates an error.
-* SingleElementAccess produces the element at the given Index
-* ElementRangeAccess produces an Array including the range of elements
+* `index` is an index starting at 0 (the first element), 1 is the element after the first etc.
+* A negative index enumerate from the end, where -1 is the last element
+  * A negative index that is abs(from) > length(array) is a position before the first element
+* SingleElementAccess produces the element at the given `index`
+  If the index is outside of the range of the array, the value `undef` is produced
+* ElementRangeAccess produces an Array including the given range of elements, starting at
+  index, and containing a (max) count of elements.
+  * if count is negative it enumerates a position from the end and the count of elements
+    to include is computed as the elements from the computed (start) index to the computed end index.
+    * if this results in a range extending to the left of the index, an empty array is produced
+  * If the computed range is partially outside of the array, the overlapping
+    range is produced.
+  * An empty overlapping range produces an empty array
+  * (the value `undef` is never produced when a length is specified)
+* Fewer than 1 or more than 2 keys generates a runtime error.
 
 Examples:
 
-    [1,2,3][2]      # => 2
-    [1,2,3,4][1,2]  # => [2,3]
-    [1,2,3][100]    # => nil
-    [1,2,3,4][-1]   # => 4
-    [1,2,3,4][2,-1] # => [3,4]
+    [1,2,3][2]       # => 2
+    [1,2,3,4][1,2]   # => [2,3]
+    [1,2,3][100]     # => undef
+    [1,2,3][100,1]   # => []
+    [1,2,3,4][-1]    # => 4
+    [1,2,3,4][2,-1]  # => [3,4]
+    [1,2,3,4][-5,-3] # => [1,2]
+    [1,2,3,4][2,-3]  # => []
+
 
 
 ### Hash Value []
@@ -695,17 +704,49 @@ have been removed.
 
 ### String Value []
 
-Access to characters in a string (a substring) have the same semantics as if the string
-was an array of the string's individual characters, put produces a string result instead of
-an array of single character strings.
+Access to characters in a string (a substring) has the following signature:
+
+    StringAccess
+      : StringExpression '[' k1 = IntegerExpression (',' k2 = IntegerExpression) ']'
+      ;
+      
+    StringExpression <String>: Expression ; 
+    IntegerExpression <Integer>: Expression ; 
+
+And with the following semantics:
+
+* k1 denotes the **start index** where the first character in the string has index 0, the second
+  character index 1, etc.
+* A negative k1 is a start index resulting from (`string.length + k1`)
+  * e.g. k1 == -1 means the index of the last character in the string, k1 == -2 the next to
+    last etc.
+  * if `string.length + k1` is negative, the index is negative and represents a position to
+    the left of the string.  
+* A positive k2 denotes the number of characters to (max) include in the result (**count**)
+  * the available characters are included if there are fewer characters available than the count
+* A negative k2 represents a computed count measured from the computed **start index** to the
+  index computed the same way as the index for a negative k1
+  * if the range extends to the left of the start index an empty string is produced
+* If optional k2 is not given it defaults to 1
+* If the given **start index** + **count** is outside of the range of the string, an empty
+  string is produced.
+* Fewer than 1 or more than 2 keys generates a runtime error.
 
 Examples:
 
-    "Hello World"[6]    # => "W"
-    "Hello World"[1,3]  # => "ell"
-    "Hello World"[6,-1] # => "World"
+    "Hello World"[6]       # => "W"
+    "Hello World"[1,3]     # => "ell"
+    "Hello World"[6,-1]    # => "World"
+    "Hello World"[-5,-1]   # => "World"
+    "Hello World"[6,-2]    # => "Worl"
+    "Hello World"[-11,-2]  # => "Hello Worl"
+    "Hello World"[-12,-2]  # => "Hello Worl"
+    "Hello World"[-666,-2] # => "Hello Worl"
+    "Hello World"[-11, 2]  # => "He"
+    "Hello World"[-12, 2]  # => "H"
+    "Hello World"[-13, 2]  # => ""
+    "abcd"[2,-3]           # => "",
 
-    
 ### Operation on Types
 ### Pattern Type []
 
