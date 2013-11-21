@@ -690,6 +690,7 @@ Signature:
 * Non existing keys does not produce entries in the result.
 * Value entries that are `undef` does not produce entries in the result.
 * Fewer than 1 argument generates an error.
+* Note that the order of hash entries is undefined.
 
 Examples:
 

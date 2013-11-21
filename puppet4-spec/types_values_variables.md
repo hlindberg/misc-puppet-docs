@@ -257,6 +257,24 @@ this will result in an error (e.g. `/.*/m`).
 The result of `Pattern[regexp_string]` is an instance of the type, not a specialization of
 the type.
 
+### Array[V]
+
+Array represents an ordered collection of elements of type V. The first index is 0.
+The index into an array is a non negative Integer. (Operations in the Puppet Language
+allows negative values to be used to perform different calculations w.r.t index). See
+Array [] operation (TODO: REFERENCE TO THIS EXPRESSION SPEC).
+
+The type of V is unrestricted.
+
+### Hash[K, V]
+
+Hash represents an unordered collection of associations between a key (of K type), and
+a value (of V type).
+
+The types of K and V are unrestricted.
+
+TODO: The key may be restricted.
+
 ### Catalog Entry
 
 Represents the abstract notion of "something that is an entry in a puppet catalog". Its
