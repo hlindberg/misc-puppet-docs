@@ -113,8 +113,9 @@ The expression part has the following rules:
 * **In all other cases a name or number that should be interpreted as a variable must be
   preceded with a `$`**
   * `${if + 1}` - **error**, i.e. not $if + 1
-  * `${2 + 2}` - **is 4**, not $0 + 2
-  * `${x + 3}` - **error**, is 'x' + 3, not $x + 3 (error because `+` does not operate on `String`)
+  * `${2 + 2}` - **is 4**, not $2 + 2
+  * `${x + 3}` - **error**, is 'x' + 3, not $x + 3 (which yields an error
+     because `+` does not operate on `String`)
   * `${if[2]}` - **error**, since `if` is a keyword and the expression is not just the if-name 
     (causes syntax error since an if expression is allowed, but must have correct syntax e.g.
      `${if true { 'always' } else { 'never' }}`
@@ -136,7 +137,7 @@ The result of the expression is converted to a `String` as specified in the foll
 * `QualifiedName` is converted to the reference in string form
 * `QualifiedReference` is converted to string
 * `Boolean` is converted to 'true' or 'false' respectively
-* A `String` is copied
+* A `String` is copied verbatim
 * A `Numeric` is converted to string using decimal radix (base 10), and uses platform specific
   defaults for conversion of floating points numbers (the result may vary from platform to
   platform)
@@ -178,12 +179,12 @@ A "literal" Array has the following syntax:
      LiteralArray: '[' ((Expression (',' Expression)*)? ','?) ']'
      
 The expressions are evaluated from left to right, and a runtime array is produced with
-the result. 
+the result. The expressions must result in an R-value.
 
 The Puppet Programming Language '[' token is used in grammatical constructs in a way that
 creates an ambiguity. This is resolved by the following rules:
 
-* `[]` as an access operator (getting a 'identified detail' from the LHS) has higher precedence
+* `[]` as an access operator (accessing an 'identified detail' from the LHS) has higher precedence
   than `[]` as a LiteralArray.
 * When `[]` appears after a `QualifiedName`, a intermediate whitespace sequence changes the
   lexical meaning of the initial `'['` to mean start of literal array.
@@ -195,7 +196,7 @@ Examples:
      $a = [1, 2, 3] # $a becomes Literal Array of 3 numbers
      $x = $a[1]     # $x becomes 2 (Accessing element at index 1 in the value referenced by $a)
      $x = $a; [1]   # $x becomes the literal array, a literal array containing '1' is the produced
-     $x = abc[1]    # $x becomes 'b' (character at index 1 in string 'abc'
+     $x = abc[1]    # $x becomes 'b' (character at index 1 in string 'abc')
      abc [1]        # calls the function abc with the literal array containing '1' as an argument
      
 ### Hash Expression
@@ -214,14 +215,15 @@ Operators
 ---
 ### + operator
 * Performs a concatenate/merge if the LHS is an Array or Hash
-* Adds LHS and RHS otherwise
+* Adds LHS and RHS numerically otherwise
   * LHS and RHS are coerced to Numeric
   * Operation fails if LHS or RHS are not numeric or coercion failed
+* Is not cumulative for non numeric operands ( `[1,2,3] + 3` is not the same as `3 + [1,2,3]`)
   
 #### Addition
 
 Addition of integer values produces an integer result. If one of the operands is a Float the
-result is also a Float. Integral does not overflow.
+result is also a Float. Integral values does not overflow.
 
     1 + 1      # produces 2
     1.0 + 1.0  # produces 2.0
@@ -254,6 +256,7 @@ Examples
 * Subtracts RHS from LHS otherwise
   * LHS and RHS are coerced to Numeric
   * Operation fails if LHS or RHS are not numeric or coercion failed
+* Is (by definition) not cumulative
   
 #### Subtraction
 
@@ -270,7 +273,7 @@ Deletion produces the LHS \ RHS (set difference).
 * Deletes matching entries from the LHS as given by the RHS. A copy of the LHS is first created,
   the original LHS is unchanged. The copy (after deletions) is produced as the result.
 * When LHS is an Array, RHS, if not already an array, is transformed to an array and all matching 
-  elements are removed (matching is done by equality comparison of each array element).
+  elements are removed (matching is done by equality `==` comparison of each array element).
 * When LHS is a Hash;
   * and the RHS is an Array, the entries with keys matching the elements in the array are deleted
   * and the RHS is a Hash, the entries with matching keys are deleted
@@ -289,14 +292,14 @@ Examples:
 
 * Changes the sign of the operand
   * RHS is coerced to Numeric
-  * Operation fails if RHS is not numeric or coercion failed
+  * Operation fails if RHS is not numeric or if coercion failed
 
 
 ### * operator
 
 * Multiplies LHS and RHS
   * LHS and RHS are coerced to Numeric
-  * Operation fails if LHS or RHS are not numeric or coercion failed
+  * Operation fails if LHS or RHS are not numeric or if coercion failed
 
 Multiplication of integer values produces an integer result. If one of the operands is a Float the
 result is also a Float. Integrals does not overflow.
@@ -305,7 +308,7 @@ result is also a Float. Integrals does not overflow.
 
 * Divides LHS by RHS
   * LHS and RHS are coerced to Numeric
-  * Operation fails if LHS or RHS are not numeric or coercion failed
+  * Operation fails if LHS or RHS are not numeric or if coercion failed
 
 Division of integer values produces an integer result (without rounding).
 If one of the operands is a Float the result is also a Float. Division by 0 is an error.
@@ -316,6 +319,8 @@ If one of the operands is a Float the result is also a Float. Division by 0 is a
   * LHS and RHS are coerced to Numeric
   * Operation fails if LHS or RHS are not Integer or coercion failed
   
+Note that `%` is not supported for `Float` as this creates very confusing results.
+
 ### << operator
 
 * Performs an append if the LHS is an `Array`

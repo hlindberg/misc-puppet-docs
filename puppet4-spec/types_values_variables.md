@@ -54,14 +54,17 @@ All types (Platform and Puppet) are organized into one *Type System*.
 The Type System
 ===============
 
-The type system contains both concrete types; `Integer`, `Float`, `Boolean`, `String`, `Pattern` (regular expression pattern),
+The type system contains both concrete types; `Integer`, `Float`, `Boolean`, `String`, `Regexp` (regular expression),
 `Array`, `Hash`, and `Ruby` (represents a type in the Ruby type system - i.e. a Class), as well as abstract
-types `Literal`, `Data`, `Collection`, and `Object`. 
+types `Literal`, `Data`, `Collection`, `Pattern`, `Enum`, `Variant`, and `Object`. 
 
 The `Array` and `Hash` types are parameterized, `Array[V]`, and `Hash[K,V]`, where if `K` is omitted, it defaults to `Literal`, and if `V` is omitted, it defaults to `Data`.
 
-The Integer type is also parameterized to enable integer range as a type. By default, an Integer
+The `Integer` type is also parameterized to enable integer range as a type. By default, an `Integer`
 represents all integral number +/- infinity. (See Integer for more information).
+
+The `Enum` and `Pattern` types subtypes of `String` that describe subsets of all strings; those
+that match a concrete enumeration of strings, and those that match a regular expression pattern.
 
 The `Ruby` type (i.e. representing a Ruby class not represented by any of the other types) does not have much
 value in puppet manifests but is valuable when describing bindings of puppet extensions.
@@ -69,9 +72,10 @@ The Ruby type is parameterized with a string denoting the class name - i.e. `Ru
 
 The abstract types are:
 
-- `Literal` - `Integer`, `Float`, `Boolean`, `String`, `Pattern`
+- `Literal` - `Integer`, `Float`, `Boolean`, `String`, `Pattern`, `Enum`
 - `Data` - any `Literal`, `Array[Data]`, or `Hash[Literal, Data]`
 - `Collection` - any `Array` or `Hash`
+- `Variant` - a parameterized type describing a disjoint set of other types
 - `Object` - any type
 
 The type hierarchy is shown in the figure below. (A single capital letter denotes a 
@@ -98,8 +102,11 @@ may appear more than once in the hierarchy, typically with different narrower ty
        |  |  |  |- (Integer with range inside another Integer)
        |  |  |- Float
        |  |- String
+       |  |  |- Enum[*strings]
+       |  |  |- Pattern[*patterns]
+       |  |
        |  |- Boolean
-       |  |- Pattern[pattern_string]
+       |  |- Regexp[pattern_string]
        |
        |- CatalogEntry
        |  |- Resource[type_name, title]
@@ -114,6 +121,7 @@ In addition to these types, a Qualified Reference that does not represent any of
           
           
 TODO: (Node, and Stage are not yet implemented. Ruby and Type are reserved but not functional)
+**TODO: Reserved: Function, Lambda, Environment**
 
 Runtime Types
 ---
@@ -135,6 +143,11 @@ must be of `String` type and contain a valid string representation of the Ruby t
 
 Represents the abstract type "any".
 
+#### Type Algebra on Object
+
+    Object ∪ Object   → Object
+    Object ∪ any      → Object
+
 ### Undef
 
 Represents the notion of "missing value". 
@@ -142,19 +155,44 @@ Represents the notion of "missing value".
 
 Values of the `Undef` type can always undergo a widening reference conversion to any other type. The reverse is however not true; only the value `undef` has the type `Undef`.
 
+#### Type Algebra on Object
+
+    Undef ∪ Undef          → Undef
+    Undef ∪ any            → Object
+
 ### Data
 
 Represents the abstract notion of "data", its subtypes are `Literal`, and `Array[Data]` or
 `Hash[Literal, Data]`.
 
+#### Type Algebra on Object
+
+    Data ∪ Data                 → Data
+    Data ∪ Literal              → Data
+    Data ∪ Array[Data]          → Data
+    Data ∪ Hash[Literal, Data]  → Data
+    Data ∪ any                  → Object
+ 
 ### Literal
 
 Represents the abstract notion of "value", its subtypes are `Numeric`, `String`, `Boolean`, and
 `Pattern`.
 
+#### Type Algebra on Literal
+
+    Literal ∪ Literal          → Literal
+    Literal ∪ (T ∈ Literal)    → Literal
+    Literal ∪ (T ∉ Literal)    → Object
+
 ### Numeric
 
 Represents the abstract notion of "number", its subtypes are `Integer`, and `Float`.
+
+#### Type Algebra on Numeric
+
+    Numeric ∪ Numeric          → Numeric
+    Numeric ∪ (T ∈ Numeric)    → Numeric
+    Numeric ∪ (T ∉ Numeric)    → Object
 
 ### Integer ([from, to])
 
@@ -168,12 +206,14 @@ memory.
 
 The Integer type can optionally be parameterized with `from`, `to` values to provide a range.
 The range can be *ascending* or *descending*. (The direction is only important when iterating
-over the set of instances).
+over the set of instances as the range of values is the same if `from > to` as when `from < to`).
 
 If `from` is unassigned, the default is -infinity, and if `to` is unassigned, the default is +infinity.
 From the Puppet Language, the default values are set by using a `LiteralDefault`. If only one
 parameter is given, it is taken as both `from` and `to`, (thus producing a range of one value).
-The `from` and `to` are inclusive.
+The `from` and `to` are inclusive. It is not possible to create an empty range (such construct,
+if allowed would represent the set of all integers that are not integers, which would make it
+a paradox).
 
 Examples:
 
@@ -210,61 +250,157 @@ Iterating over an integer range:
      
      Integer[0,default].each |$x| { notice $x } # error, unbound range (infinite)
 
+#### Type Algebra on Integer
+
+    Integer ∪ Integer               → Integer
+    Integer ∪ Float                 → Numeric
+    Integer ∪ Numeric               → Numeric
+    Integer ∪ (T ∉ Numeric)         → Object
+    Integer[a, b] ∪ Integer[c, d]   → Integer[min(a, c), max(b,d)]
+
 ### Float
 
 Represents an *inexact* real number using the native architecture's double precision floating
-point representation.
+point representation. In contrast to `Integer`, operations on `Float` can cause the result to be negative or positive *Infinity* (i.e. it loses precision to the point where there is no value digits left). This is treated as an error in the Puppet Programming Language (it can be observed by dividing a floating point value with 0).
 
-Learn more about floating point than you ever want to know from these articles:
+You can learn more about floating point than you ever want to know from these articles:
 
 * docs.sun.com/source/806-3568/ncg_goldberg.html
 * wiki.github.com/rdp/ruby_tutorials_core/ruby-talk-faq#wiki-floats_imprecise
 * en.wikipedia.org/wiki/Floating_point#Accuracy_problems
+
+#### Type Algebra on Float
+
+    Float ∪ Float          → Float
+    Float ∪ Integer        → Numeric
+    Float ∪ Numeric        → Numeric
+    Float ∪ (T ∉ Numeric)  → Object
 
 ### String
 
 Represents a sequence of Unicode characters up to a maximum length of 2^31-1 (the maximum
 non negative 32 bit value).
 
+The `String` type represents all strings. Abstract subtypes of String (`Enum`, `Pattern`) describes subsets matching an enumeration of strings, or those that match a pattern.
+
+Internally, when performing type inference, the String type is parameterized to the set of
+strings it represents - this has very little practical consequence in Puppet Programs except
+when calling a function that performs inference and then using the inferred String type in other
+type calculations. (There is no concrete syntax in the Puppet Language to create a parameterized
+String type, and no syntax to get the type parameter of a type, so the explanation below shows fictitious syntax as an illustration.
+
+Given the input:
+
+     ['a', 'b', 'c']
+     
+The type is inferred to `Array[String]`, internally this is really `Array[String['a', 'b', 'c']]`.
+This allows type calculations to assert:
+
+     Array[Pattern['a-z']] >= type_of(['a','b','c'])
+     
+#### Type Algebra on String
+
+The commonality of two strings is the union of the two strings.
+
+    type_of([a,b,c])                 # => Array[String[a,b,c]]
+    String[a,b,c] == String[b,c,a]   # => true
+    typeof([String[a,b], String[c]]) # => Array[Type[String[a,b,c]]]
+
+    String    ∪ String     → String
+    String[x] ∪ String[x]  → String[x]
+    String[x] ∪ String[y]  → String[x,y]
+    String    ∪ Enum       → String     # T.B.D
+    String[x] ∪ Enum[x]    → String[x]  # T.B.D
+    String    ∪ Pattern    → String
+    String ∪ (T ∈ Literal)  → Object
+    String ∪ (T ∉ Literal)  → Object
+
+### Enum[*strings]
+
+Represents all strings that are equal to one of the string type parameters given to the `Enum` type.
+
+Example:
+
+     Enum['port', 'name', 'ip']
+     
+#### Type Algrebra
+
+The commonality of two Enum types is the set operation enum | enum.
+
+     type_of([Enum[a,b,c], Enum[x,b,c]] # => Array[Type[Enum[a,b,c,x]]
+
+### Pattern[*patterns]
+
+Represents all strings that match one or more patters (must match all, typically one is used).
+The the type parameters can be string expressions or literal regular expressions (or a mix)
+
+Example:
+
+     Pattern['.*']
+     Pattern[/^all of me$/]
+     
+#### Type Algebra
+The commonality of two Pattern types is the set operation pattern | pattern:
+
+     type_of([Pattern[a], Pattern[b]]) # => Array[Type[Pattern[a,b]]]
+     
+TODO: Pattern P1 | Pattern P2 = Variant[P1, P2]
+
 ### Boolean
 
 The types of the boolean expressions `true` and `false`.
 
-### Pattern[pattern_string]
+### Regexp[pattern]
 
-The type of a Regular Expression produced by the following Puppet Language constructs:
+An unparameterized `Regexp` describes the set of all regular expressions. A parameterized `Regexp`
+describe the very narrow set of source expression identical regular expressions.
+
+The type of a Regular Expression produced by a Literal Regular Expression:
 
      LiteralRegularExpression
        : '/' RegexpString '/'
-       | 'Pattern' '[' SExpression ']'
        ;
 
-     Expression
-       : . . .
-       | Expression '=~' (SExpression | LiteralRegularExpression)
-       | Expression '!~' (SExpression | LiteralRegularExpression)
+A `Regexp` `Type` is created by:
+
+     RegexpTypeExpression
+       : 'Regexp' ('[' PatternStringExpression | LiteralRegularExpression ']')?
        ;
-       
-Where `SExpression` is an expression that evaluates to `RegexpString` (a string containing a valid
-regular expression), and `Expression` evaluates to a regular `String` (only strings can be matched
-by a regular expression. The RHS of the `=~`, `!~` operators accepts an `SExpression` or a `LiteralRegularExpression`; if a string is given a new regular expression is created from this string.
+
+     PatternStringExpression<String> : Expression ;
+
+See also Match Expression (`=~` and `!~`) for more usage of the `Regexp` type.
 
 The syntax of the Regular Expression is defined by Ruby's implementation. Puppet's regular
 expressions does not support `\A` and `\Z` and does not support options. If `\A` or `\Z` are used
 in the regular expression string, these are removed. If an attempt is used to specify options,
 this will result in an error (e.g. `/.*/m`).
 
-The result of `Pattern[regexp_string]` is an instance of the type, not a specialization of
-the type.
+The result of `Regexp[pattern]` is a parameterized `Regexp` type that in certain operations
+can be used instead of a literal regular expression.
+
+#### Type Algebra on Regexp
+
+    Regexp       ∪  Regexp         → Regexp
+    Regexp[R]    ∪  Regexp[R]      → Regexp[R]
+    Regexp[R]    ∪  Regexp[Q]      → Regexp
+    Regexp[R]    ∪  Literal        → Literal
+
 
 ### Array[V]
 
-Array represents an ordered collection of elements of type V. The first index is 0.
-The index into an array is a non negative Integer. (Operations in the Puppet Language
-allows negative values to be used to perform different calculations w.r.t index). See
-Array [] operation (TODO: REFERENCE TO THIS EXPRESSION SPEC).
+Array represents an ordered collection of elements of type `V`. 
+The first index in an array instance is a non negative integer and starts with 0.
+(Operations in the Puppet Language allows negative values to be used to perform different calculations w.r.t index). See Array [] operation (TODO: REFERENCE TO THIS EXPRESSION SPEC).
 
-The type of V is unrestricted.
+The type of `V` is unrestricted.
+
+#### Type Algebra on Array
+
+    Array       ∪  Array         → Array
+    Array[R]    ∪  Array[R]      → Array[R]
+    Array[R]    ∪  Array[Q]      → Array[R ∪ Q]
+
 
 ### Hash[K, V]
 
@@ -274,6 +410,27 @@ a value (of V type).
 The types of K and V are unrestricted.
 
 TODO: The key may be restricted.
+
+#### Type Algebra on Hash
+
+    Hash         ∪  Hash          → Hash
+    Hash[K,V]    ∪  Hash[Q, W]    → Hash[K ∪ Q, V ∪ W]
+
+### Variant[*types]
+
+A `Variant` type represents a disjoint set of types. (Other terms used for this in other languages
+are Discrimination Union, Disjoint Union, Variant Record, Tagged Union).
+
+Examples:
+
+    $array_of_numbers =~ Array[Variant[Integer[1000, 1999], Integer[10000, default]]]
+
+which is true if all the numbers in an array of numbers are between 1000 and 1999 or >= 10000
+
+#### Type Algebra on Variant
+
+    Variant         ∩  Variant          → Variant
+    Variant[*T]     ∩  Variant[*Q]      → Variant[*T | *Q]
 
 ### Catalog Entry
 
