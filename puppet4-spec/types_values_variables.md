@@ -488,6 +488,10 @@ the class (`String`, or `QualifiedName`).
 
 If multiple class names are given, an `Array` of parameterized `Class` types is produced.
 
+**TODO**: In 3x it is allowed to also use an upper case Resource reference e.g. `Class[Baz]`. This
+is currently supported in the new implementation. It should not if names are strict as this
+really means `Class[Resource[Baz]]`. Discuss if this support should be removed.
+
 ### Class Inheritance - TODO
 
 The type system does currently not treat (Host) Class inheritance as subtyping.
@@ -543,11 +547,43 @@ The type of a variable is determined by what is assigned to it.
 </td></tr>
 </table>
 
+### Variable Names
+
+Variable names must conform to the following syntax:
+
+     Variable
+       : '$' (NumericVariable | NamedVariable )
+       ;
+       
+     NumericVariable
+       : /0|([1-9][0-9]*)/
+       ;
+       
+     NamedVariable
+       : /(::)?[a-z]\w*(::[a-z]\w*)*/
+       ;
+
+That is, a numeric variable must be a valid decimal number (a name that starts with 0 and has additional digits is also illegal). A named variable must start with a lower case letter a-z
+and after that contain any word characters (a-z, A-Z, 0-9 and _). Specifically, a hyphen character
+or a period are not allowed as they were in some earlier versions of the Puppet Programming Language.
+Also note that it is not allowed to use an upper case letter nor an underscore in the initial position.
+
+Also note that it is illegal to reference a numeric variable with a fully qualified name (i.e.
+a match result in another scope).
+
+### Variable Reference
+
+An expression such as `$x` evaluates to the value bound (assigned) to the variable name. Numeric
+variables are assigned as a side effect of evaluating a match expression. SEE TODO REF. It is legal to reference any numeric variable, but it is illegal to reference a named variable that does not exist. A variable that has been assigned, a built in variable, or a variable that represents a parameter value that is provided by the runtime (e.g. meta-parameters) are said to exist.
+
 ### Initial Values of Variables
 
 A Puppet Programming Language Variable comes into existence when an assignment is made to
 the variable. There is no such thing as an un-initialized variable since all variables that
 exist have a value (even if that value may be the literal `undef` value).
+
+All numeric variables are said to exist. If they have not been set by the last match expression in
+the same scope, they evaluate to `undef`.
 
 Conversions and Promotions
 ===
