@@ -67,7 +67,7 @@ Numbers evaluate to themselves.
     'hello'
     'I take a bit
     more room'
-    'He said "hello", but it sounded like \'hell-yo\''
+    'He said "hello", but it sounded like \'yello\''
     
     # Double quoted strings
     "You can quote me on that"
@@ -105,7 +105,7 @@ The expression part has the following rules:
   * `${<QualifiedName>}` - e.g. `${var}` becomes `${$var}`
   * `${<Number>}` - e.g. `${0}` becomes `${$0}`
 * Automatic conversion is also performed in these cases but keywords must be written with
-  a preceding $:  
+  a preceding `$`:  
   * `${<AccessExpression>}` - e.g. `${var[key]}`, `${var[key][key]}` becomes `${$var[key]}`,
     `${$var[key][key]}`
   * `${<MethodCall>}` - e.g. `${var.each ...}` becomes `${$var.each}`, which also works for the 
@@ -124,7 +124,7 @@ The expression part has the following rules:
 <tr><td>
   These rules are different from the rules in Puppet 3x where many constructs did
   not work because of failure to recognize what should <b>not</b> be interpreted 
-  as variable reference. Anything but the simplest forms of expression interpolation
+  as a variable reference. Anything but the simplest forms of expression interpolation
   could have surprising effect.
 </td></tr>
 </table>
@@ -913,6 +913,32 @@ Examples:
   (no array is generated).
 </td></tr>
 </table>
+
+#### Float Type [ ]
+
+Produces a Float type with a range. A Float type has the default range -Infinity to +Infinity.
+A Float range where one or both ends is Infinity is said to be an *open range*, else it is a
+*closed range*. The set of values in the range is inclusive of the given values (theoretically
+not in an open range since though). It is not possible to iterate over the values (in contrast to
+an Integer range). The range can be described as an ascending or defending range (the values in the set are the same).
+
+Signature:
+
+    Float[exact]
+    Float[from, to]
+
+* Accepts one or two keys
+* Keys must evaluate to a Float, or an Integer, or to literal `default`
+* A value of `default` means -Infinity if given as the value of `from`, and +Infinity if given
+  as `to`.
+* The `from` value may be > than the `to` value
+
+Examples:
+
+    Float[2]          # the exact value 2.0
+    Float[2.0]        # the exact value 2.0
+    Float[1, 3.2]     # values 1.0-3.2 inclusive
+    Integer[3.2,1.5]  # values 3.2-1.5 inclusive
 
   
 Function Calls

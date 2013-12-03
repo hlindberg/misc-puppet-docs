@@ -100,7 +100,8 @@ may appear more than once in the hierarchy, typically with different narrower ty
        |  |- Numeric
        |  |  |- Integer[from, to]
        |  |  |  |- (Integer with range inside another Integer)
-       |  |  |- Float
+       |  |  |- Float[from, to]
+       |  |  |  |- (Float with range inside another Float)
        |  |- String
        |  |  |- Enum[*strings]
        |  |  |- Pattern[*patterns]
@@ -258,10 +259,14 @@ Iterating over an integer range:
     Integer ∪ (T ∉ Numeric)         → Object
     Integer[a, b] ∪ Integer[c, d]   → Integer[min(a, c), max(b,d)]
 
-### Float
+### Float ([from, to])
+Represents a range of *inexact* real number values. The default is the range +/- infinity.
 
-Represents an *inexact* real number using the native architecture's double precision floating
+A float is an *inexact* real number using the native architecture's double precision floating
 point representation. In contrast to `Integer`, operations on `Float` can cause the result to be negative or positive *Infinity* (i.e. it loses precision to the point where there is no value digits left). This is treated as an error in the Puppet Programming Language (it can be observed by dividing a floating point value with 0).
+
+A float range behaves as an Integer range and accepts both Integer, and Float values when
+specifying the range. It is not however possible to iterate over a Float range.
 
 You can learn more about floating point than you ever want to know from these articles:
 
@@ -271,10 +276,11 @@ You can learn more about floating point than you ever want to know from these ar
 
 #### Type Algebra on Float
 
-    Float ∪ Float          → Float
-    Float ∪ Integer        → Numeric
-    Float ∪ Numeric        → Numeric
-    Float ∪ (T ∉ Numeric)  → Object
+    Float ∪ Float               → Float
+    Float ∪ Integer             → Numeric
+    Float ∪ Numeric             → Numeric
+    Float ∪ (T ∉ Numeric)       → Object
+    Float[a, b] ∪ Float[c, d]   → Float[min(a, c), max(b,d)]
 
 ### String
 
