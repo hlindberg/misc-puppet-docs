@@ -107,6 +107,10 @@ In the future lookup and typing can be done directly in the language: Say someth
         #
       }
 
+Or simplified even further if all parameters should be looked up:
+
+    class ntp::install lookup( Boolean $package_ensure, String $package_name)
+    
 It is also easy to imagine various ways to extend this; differently named files or paths loaded at different times, say contributions to included, excluded classes,
 mix in with ENC etc. etc.
  

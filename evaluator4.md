@@ -518,3 +518,39 @@ Now, the variables `$if`, `$unless`, `$undef`, `$true`, `$false`, and `$case` ha
 
 That is, if that should be legal at all.
 
+Relationships & Collector Expression
+---
+Collector expressions are complicated. They construct an expression array in a very simplistic form that is handed to an indirection for search. This is an API that is not easily changed (both an internal puppet indirection and the interface to Puppet DB).
+
+Further, a collection while not being an value still produces a value when evaluated; true if something was found, and false otherwise. A side effect is that found resources are realized. Those resources that have already been realized by a previous collection are ignored. Thus false may be returned for the same collection at a later point.
+
+This filtering of already collected elements makes it quite difficult to use a collection
+in a relationship as it may not provide the intended values.
+
+### Queries
+
+queries are expressed with all values in string form. This poses a problem since query
+values are *NOT* turned into numbers (because they are handled by 3x (SIGH!)
+
+The value in the resource is a number, the query queries for a string. It uses Ruby == to
+check if values are the same. If it instead used Puppet equality, a Number and a String would
+be equal if the string coerced to a number is equal to the string.
+
+If instead, the number is turned into a string it must be converted to the same radix
+as the query string (or they will not compare equal. (This is a problem in Puppet 3x since
+if the value is given in hex or decimal a query using a different radix would fail.
+
+The implementation must consider the following cases:
+* Future parser is used and values are numeric (and are stored as numeric values)
+* Current parser is used and expects strings
+* Current parser is used and produces resources with string
+* Future changes uses new parser / evaluator to also perform queries and the query is
+  also a number (while the resource may be a string).
+  
+The safest is to always make the query check if one operand is numeric, then figure out
+the radix from the string and convert the number using the radix of the string before comparing.
+
+A similar problem exists if values are arrays or hashes as the query uses Ruby == and not
+Puppet ==. (Puppet is case insensitive and matches string/numbers correctly, ruby does not).
+
+Question is what puppet DB does in the same situation?

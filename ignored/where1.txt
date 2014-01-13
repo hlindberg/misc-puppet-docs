@@ -1,0 +1,29 @@
+#0 Puppet::Pops::Parser::Parser._parse
+       at line /Users/henrik/git/puppet/lib/puppet/pops/parser/parser_support.rb:204
+    #1 Puppet::Pops::Parser::Parser.parse_string(code#String)
+       at line /Users/henrik/git/puppet/lib/puppet/pops/parser/parser_support.rb:138
+    #2 Puppet::Pops::Parser::EvaluatingParser.parse_string(s#String)
+       at line /Users/henrik/git/puppet/lib/puppet/pops/parser/evaluating_parser.rb:20
+    #3 Puppet::Parser::E4ParserAdapter.parse
+       at line /Users/henrik/git/puppet/lib/puppet/parser/e4_parser_adapter.rb:34
+    #4 Puppet::Node::Environment.perform_initial_import
+       at line /Users/henrik/git/puppet/lib/puppet/node/environment.rb:466
+    #5 Puppet::Node::Environment.known_resource_types
+       at line /Users/henrik/git/puppet/lib/puppet/node/environment.rb:216
+    #6 Puppet::Resource::TypeCollectionHelper.known_resource_types
+       at line /Users/henrik/git/puppet/lib/puppet/resource/type_collection_helper.rb:5
+    #7 Puppet::Parser::Compiler.initvars
+       at line /Users/henrik/git/puppet/lib/puppet/parser/compiler.rb:479
+    #8 Puppet::Parser::Compiler.initialize(node#Puppet::Node)
+       at line /Users/henrik/git/puppet/lib/puppet/parser/compiler.rb:216
+    #9 Puppet::Parser::Compiler.compile(node#Puppet::Node)
+       at line /Users/henrik/git/puppet/lib/puppet/parser/compiler.rb:24
+    #10 RSpec::Matchers::BuiltIn::RaiseError.matches?(given_proc#Proc)
+        at line /Users/henrik/.rvm/gems/ruby-1.9.3-p448/gems/rspec-expectations-2.11.3/lib/rspec/matchers/built_in/raise_error.rb:193
+    #11 RSpec::Matchers::BuiltIn::RaiseError.matches?(given_proc#Proc)
+        at line /Users/henrik/.rvm/gems/ruby-1.9.3-p448/gems/rspec-expectations-2.11.3/lib/rspec/matchers/built_in/raise_error.rb:22
+    #12 RSpec::Expectations::PositiveExpectationHandler.handle_matcher(actual#Proc, matcher#RSpec::Matchers::Buil...,...)
+        at line /Users/henrik/.rvm/gems/ruby-1.9.3-p448/gems/rspec-expectations-2.11.3/lib/rspec/expectations/handler.rb:9
+    #13 RSpec::Expectations::ExpectationTarget.to
+        at line /Users/henrik/.rvm/gems/ruby-1.9.3-p448/gems/rspec-expectations-2.11.3/lib/rspec/expectations/expectation_target.rb:34
+    #14  at line /Users/henrik/git/puppet/spec/integration/parser/future_compiler_spec.rb:192
