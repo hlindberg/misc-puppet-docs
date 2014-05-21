@@ -1,6 +1,6 @@
 Getting your Puppet Ducks in a Row
 ===
-A conversation that comes up frequently is if the Puppet Programming Language is declarative or not. This is usually the topic when someone has been fighting with how order of evaluation works and have
+A conversation that comes up frequently is if the Puppet Programming Language is declarative or not. This is usually the topic when someone has been fighting with how order of evaluation works on the master side, and have
 been beaten by what sometimes may seem as random behavior. In this post I want to explain how
 Puppet works and try to straighten out some of the misconceptions.
 
@@ -10,8 +10,7 @@ First, lets get the terminology right (or this will remain confusing). It is com
 
 Parse Order is the order in which Puppet reads puppet manifests (`.pp`) from disk, turns them into tokens and checks their grammar. The result is something that can be evaluated (technically an Abstract Syntax Tree (AST)). The order in which this is done is actually of minor importance from a user perspective, you really do not need to think about how an expression such as `$a = 1 + 2` becomes an AST.
 
-OTOH, if you think about "parse order" as "the order the files are parsed", but this order is
-also of minor importance. Puppet starts with the `site.pp` file (or possibly the `code` setting in the configuration), then asking external services (such as the ENC) for additional things that are not included in the logic that is loaded from the `site.pp`. In versions from 3.5.0 the manifest setting can also refer to a directory of `.pp` files (preferred over using the now deprecated `import` statement).
+I have users talk about "parse order" with the meaning "the order the files are loaded and parsed", which to me is a bit of a stretch since that involves several additional concepts (as you will see later). The overall ordering of the execution is that Puppet starts with the `site.pp` file (or possibly the `code` setting in the configuration), then asking external services (such as the ENC) for additional things that are not included in the logic that is loaded from the `site.pp`. In versions from 3.5.0 the manifest setting can also refer to a directory of `.pp` files (preferred over using the now deprecated `import` statement).
 
 At this point (after having started and after having parsed the initial manifest(s), Puppet first matches the information about the node making a request for a catalog with available node definitions, and selects the first matching node definition. At this point Puppet has the notion of:
 

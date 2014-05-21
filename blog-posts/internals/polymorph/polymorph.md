@@ -1,9 +1,9 @@
 In this series of blog posts about the future parser/evaluator the turn has come to
-*polymorphic dispatch*, a technique used to implement a Strategy pattern where
+*polymorphic dispatch*, a technique used to implement a *strategy pattern* where
 the logic is kept separate from the data/content it is operating on. The rationale for this
-is described in the previous post on "Separation of Concerns".
+is described in the previous post on ["Separation of Concerns"][0].
 
-TODO: Ref to previous post
+[0]:http://puppet-on-the-edge.blogspot.be/2014/01/puppet-internals-separation-of-concerns.html
 
 ### The Basic Problem
 
@@ -16,7 +16,7 @@ is easily done (if we can accept static late binding) since we can:
 * include a module in a class
 * reopened a class and add/modify methods 
 
-But, we can not easily support several variants of the same strategy, and we have to make
+We can however not easily support several variants of the same strategy, and we have to make
 sure that what we apply does not introduce methods with the same name since they would override
 each other's contributions to the class otherwise. 
 
@@ -27,7 +27,7 @@ reserved as a last resort to temporarily fix problems in 3d party logic.
 
 ### Polymorphic Dispatch
 
-In the future parser/evaluator, polymorphic dispatch is implemented using a [Visitor Pattern][3] and I am going to jump straight into examples showing how the implementation is used.
+In the Puppet 3.x future parser/evaluator, polymorphic dispatch is implemented using a [Visitor Pattern][3] and I am going to jump straight into examples showing how this implementation is used.
 
 [3]:http://en.wikipedia.org/wiki/Visitor_pattern
 
@@ -38,7 +38,7 @@ would be to just output the name of the class - while clear to implementors, use
 have a hard time understanding references to implementation classes.
 
 There are several options available when using a visitor and we are going to start with
-the simplest form of visitor and add an implementation that outputs "Object (label provider is incomplete)" for all kinds of objects.
+the simplest form of visitor and add an implementation that just outputs "Object (label provider is incomplete)" for all kinds of objects.
 
     class LabelProvider
     
@@ -62,6 +62,11 @@ calls to methods that start with `"label"` followed by an underscore, and the la
 of the class name of the object it is told to operate on. If no such method is implemented,
 a search is made up the class hierarchy of the given object until a method is found. If no method
 is found an error is raised.
+
+We then use the label provider to produce output:
+
+    provider = LabelProvider.new
+    puts provider.label(3)
 
 We can now add methods as needed to create labels for all kinds of objects.
 
@@ -93,7 +98,7 @@ is made. Here is the improved implementation:
       end
       
       def label(o)
-        @label_visitor.visit_this(self, o)
+        @@label_visitor.visit_this(self, o)
       end
 
     # the rest is the same...
@@ -101,16 +106,17 @@ is made. Here is the improved implementation:
     
 We can make one further optimization; since the visitor can be used with any number of
 arguments, the generic form of calling `visit` (or `visit_this`) accepts a variable number of
-arguments, and requires some internal shuffling of the arguments we can instead call an optimized version (~30% faster) - in this case `visit_this_0`, since we are not giving any additional arguments (except the visited object).
+arguments, and requires some internal shuffling of the arguments. We can instead call an optimized version (~30% faster) - in this case `visit_this_0`, (it is '0' since we are not giving any additional arguments (except the visited object)).
 
       def label(o)
         @string_visitor.visit_this_0(self, o)
       end
 
-There are optimized versions for 1, 2 or 3 arguments.
+There are optimized versions for 1, 2 or 3 arguments, called `visit_this_1`, etc.
 
-The optimized (caching) version can be used when we know that the class hierarchy is not
-going to change dynamically. If that is the case, we need the use the non caching variant.
+The optimized (caching) version can be used when we know that the class hierarchy or the set of available visitable methods is not going to change. If that is the case, we would need the use the non caching variant.
+(As a side note, if we are dealing with a design where classes are redefined
+to be subclasses of something other than their current superclass we are really in trouble).
 
 ### Min and Max number of arguments
 
@@ -177,7 +183,8 @@ As an example, here is how the `ComparisonOperator` is used in the evaluator:
 
 (The call to `fail` will be covered in a future post that covers error handling).
 
-Lastly, the `AccessOperator` needs to maintain state in order to be able to provide good error messages in case of failures. Here is an example of how it is used in the evaluator:
+Lastly, the `AccessOperator` (which represents expressions in the Puppet Programming Language on the form `expression [ expression, expression ...]`)
+needs to maintain state in order to be able to provide good error messages in case of a failure that relates to one of the evaluated expressions passed as an argument. Here is an example of how it is used in the evaluator:
 
     # Evaluates x[key, key, ...]
     #
@@ -192,7 +199,7 @@ an extra argument in each call - more benchmarking will tell.
 
 ### Calling the "super" Version
 
-Sometimes there is the requirement to call a super version of a polymorph method. Here is
+Sometimes it is required to call a super version of a polymorph method. Here is
 an example:
 
     def doit_Base(o)
@@ -203,12 +210,12 @@ an example:
       doit_Base(o) ...
     end
 
-It is the responsibility of the implementor to ensure that the right method is called (i.e. that
-`Special` is indeed a specialization of `Base`). It is also the responsibility of the implementor
-to check when method are added if there are any direct calls to "super" versions that needs to
-be rewired (say if the class hierarchy is changed).
+It is the responsibility of the implementor to ensure that the right "super" method is called
+(i.e. that `Special` is indeed a specialization of `Base`). It is also the responsibility of
+the implementor to check when method are added if there are any direct calls to "super" versions
+that needs to be rewired (say if the class hierarchy is changed).
 
-### Feature or Flaw?
+### Last Part of Class Name, Feature or Flaw?
 
 A decision was made to make the `Visitor` only use the last part of the class name. This means it is
 incapable of differentiating between two classes in different name spaces if they share the same name. This is both a feature (a strategy can be compatible with two different implementations)
@@ -217,6 +224,34 @@ and a flaw (when used with 3d party classes that were not designed with unique c
 In practice, this has not been a limitation in the implementation of the parser/evaluator. If later
 required, the `Visitor` could be made aware of additional segments in the name. This would probably
 need to be a specialized `Visitor` as it would be slightly less performant.
+
+### Strategy Composition
+
+Since our strategies are separate instances we can easily pass them around. We can compose the
+behavior we want and pass the strategies as arguments instead of having to rely on "the one and
+only possible implementation" (which is what we get if we reference a class or module by name). We may want to have say a debugging version of the label provider
+where we output additional information. Exactly how we compose strategy objects and wire them
+into the logic where we want them to be used is for a later post where I am going to be talking about "inversion of control", and "injection". We could do something simple like this:
+
+     class SomeClass
+       def initialize(label_provider = DefaultLabelProvider.new)
+         @label_provider = label_provider
+       end
+       
+       def some_work(x)
+         # ooops
+         raise SomeError, "There is something wrong with the #{@label_provider.label(x)}."
+       end
+     end
+
+### Summary
+
+In this post, the concept of *polymorphic dispatch* was introduced; basically moving methods
+from a set of classes to a common strategy where a visitor is used to dispatch the calls as if the methods were in their original place inside the classes - or to be more accurate, to the same effect
+as if they were in their original places.
+
+This organization ensures that strategies do not clash, and we get a design with low coupling, and
+high cohesion; two desirable measures of architectural quality.
 
 ### In the Next Post
 

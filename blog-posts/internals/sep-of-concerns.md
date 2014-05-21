@@ -1,7 +1,7 @@
 Puppet Internals - Separation of Concern
 ---
 
-As we are getting closer to Puppet 4 where the future parser (available as an experimental feature since 3.2) and future evaluator (about to be released as an experimental feature in in 3.5) are
+As we are getting closer to Puppet 4 where the future parser (available as an experimental feature since 3.2) and future evaluator (about to be released as an experimental feature in 3.5) are
 expected to become the standard, the implementation of these two (now experimental) features
 is something that will be the concern of many contributors.
 
@@ -9,13 +9,15 @@ As the implementation in these new features is somewhat different from the rest 
 code base I want to explain the rationale behind the design, describe the various
 techniques and how they are used in the future parser and evaluator.
 
-So, in this series of posts about the implementation of Puppet's future parser/evaluator
+In this series of posts
 I am going to be talking about concepts such as *polymorphic dispatch*, *adapters*, and *modeling*,
-but also about more concrete things such as error handling.
+but also about more concrete things such as *association of line/position with expressions* and
+error handling.
 
 Jumping ahead in the story - polymorphic dispatch and adapters are techniques that helps us
 implement code in way that keeps different concerns separate. Before explaining how these techniques 
-work it is important to understand what "keeping concerns separate" is all about, and what happens when there is no such separation.
+work it is important to understand what "keeping concerns separate" (or "separation of concerns" as
+it is normally referred to) is all about, and what happens when there is no such separation.
 
 ### Separation of Concerns
 
@@ -30,22 +32,34 @@ used to deal with the Greek city-states they ruled over, and they had two goals 
 This sounds like a perfect strategy for software! While we from a functional standpoint want
 our logic to "link up" an "become more powerful" we certainly do not want to be subdued by
 it from a maintenance and future development standpoint.
+
 If you have worked with a long lived software project that has gone without a good trim for a long time you know what this looks like. Everything you want to change is interlinked with
 everything else to the point that it is almost impossible to begin renovations without
-causing the entire structure to collapse.
+causing the entire structure to collapse. This reminds me of the song Dem-Bones song, only modified to go "Neck-bone connected to ... every other Bone". This is also known by the term "high coupling".
 
+The term "cohesion" is closely related to "coupling" but measures how various features of
+a component are focused and have much in common - the higher the cohesion the better. We can
+observe low cohesion when we find an odd responsibility (we can not parse a file without also
+keeping track of the file being changed). This [Wikipedia article][1] talks about the various
+forms of cohesion - thematically low cohesion comes from grouping (typically methods) based
+on a non-functional principle.
+
+[1]:http://en.wikipedia.org/wiki/Cohesion_(computer_science)
+ 
 Certainly no one wants to create a system guided by the opposite principle; "lets mix it all up" - so
 what causes software to almost secretly grow in complexity while no one was watching? Are there
-evil elfs that cause this bit-rot?
+evil chiropractors at work here, rearranging Dem-Bones?
 
 Of source not, it typically
 starts with one small step taken by one developer, added to by the next, and so on. This goes on
 for a while, and then someone decides that there is too much duplication of code and code is
-locally refactored. While there is now less code, there is also more cohesion. After a period
-of increased cohesion there is usually a phase of feature expansion. Now this is more difficult
-because of the cohesion and there is usually time pressures preventing a full scale refactoring.
+locally refactored. While there is now less code, there is also more coupling. After a period
+of increased coupling there is usually a phase of feature expansion. Now this is more difficult
+because of the coupling and there is usually time pressures preventing a full scale refactoring.
 Instead new functionality is shoehorned in. The system again undergoes refactoring and common
-pieces are broken out into utilities for the sake of reusability (again less code and more cohesion).
+pieces are broken out into utilities for the sake of reusability (again less code and more coupling).
+When such refactoring is performed with only a single use case in mind the principle used for
+grouping is often flawed. When this has been ongoing for a while you will find several "Swiss army knifes" backed by an army of Utility classes.
 
 What was once bad in terms of duplicated code (but easily changeable, because a variation
 that was no longer needed could easily be deleted or changed) has been replaced by logic that almost everything depends on and no one dares to touch since consequences are very hard to predict. While
@@ -56,6 +70,9 @@ It does not really matter which underlying technology something is implemented i
 only manifests itself slightly differently depending on if it is object oriented, or functional,
 if it is strongly typed or not. In general, the less stringent the implementation language is, the
 more trouble you can get into, and faster.
+
+The qualities to strive for are to have small, simple things with clear focus combined into
+larger things with clear focus.
 
 ### What is it we are separating?
 
@@ -78,7 +95,7 @@ that is included in an error message to help identify the location of a problem.
 This list can become very long, there simply is no convention. Instead, there is typically a tendency
 to implement multiple `to_s` - e.g. `to_label`, `to_debug_string`, `to_json`, `to_pson`, `to_yaml`, etc. etc.
 
-While other functions we want to apply to a particular piece of data may not be
+While other functions that we want to apply to a particular piece of data may not be
 as generic as "represent in textual form" there are often several variations on how we want something
 done. This may manifest itself as several similar methods or by having a rich set of parameters. Both
 adding complexity to the implementation.
@@ -89,7 +106,7 @@ What we want to do, instead of pushing every possible piece of wanted functional
 class, is to separate functionality into a separate piece of logic. This is often referred to
 as using a "Strategy" or a "Policy" pattern. Depending on the language used such separation could
 be achieved with inheritance, multiple inheritance, by using a "mixin", or aggregation. Of these only
-aggregation (or indeed complete separation ) allows us to dynamically compose the behavior -
+aggregation (or indeed complete separation) allows us to dynamically compose the behavior -
 most languages only have features for static binding (even if it may be late binding at runtime).
 
 The Ruby way of doing this is to write a module, and at runtime decide to include a specific module
@@ -111,7 +128,7 @@ Typically the behavior of data boils down to:
 * Type safe setters (catch bad input early)
 * Generic operations such as "equality" and "identity"
 * Intrinsics such as "a car has four wheels", "a specific wheel can only be mounted on one car at 
-  the time" (that is if we are implementing a Car object).
+  a time" (that is if we are implementing a Car object).
 
 
 ### Degrees of separation
@@ -121,22 +138,22 @@ Maybe it is enough to just not have all the code in one place and compose either
 strategies all at the same time? (Just think about all the various ways we may want to
 turn an object into "textual representation").
 
-Sometimes there is good reasons to create a design with high cohesion and specialization - usually
+Sometimes there is good reasons to create a design with high coupling and specialization - usually
 to get performance out of the system. But as humans we are often dead wrong when we guess what
-may be the bottlenecks of our system and it is best to optimize after measuring. A problem with
-a design using tight coupling is that it is more difficult to change into a loosely coupled
-design than vice versa, and it is also more difficult to test.
+may be the bottlenecks of our system and it is best to only optimize after measuring. A problem with
+a design using high coupling is that it is more difficult to change into a loosely coupled
+design than vice versa (for performance reasons), and it is also more difficult to test.
 
 As a rule of thumb, design with anemic content model and use loosely coupled strategies.
 
 ### An Example
 
-I am picking `ArithmeticExpression` as an example. Later in this series we will get to the details
+I am picking `ArithmeticExpression` as an example. Later in this series I will get to the details
 of the real implementation, but the principle is the same.
 
 An `ArithmeticExpresion` is used to represent an expression such as "1 + 2" in the Puppet
 Programming Language. It has a left-expression (a '1' in the example), a right-expression ('2'),
-and an operator (:'+'). It can be trivially implemented in Ruby as:
+and an operator ('+'). It can be trivially implemented in Ruby as:
 
     class ArithmeticExpression
       attr_accessor left_expression
@@ -183,7 +200,7 @@ pieces in hundred places is not particularly fun to implement and is costly to m
 and its subexpressions).
 
 While we could use language techniques such as inheritance to implement some common behavior
-we then increase cohesion, and we still cannot modify the behavior dynamically. We could also
+we then increase coupling, and we still cannot modify the behavior dynamically. We could also
 use a "inversion of control" (or injection pattern) and instantiate each expression
 with strategies for producing a string and for evaluation.
 
@@ -213,7 +230,7 @@ references, and we need to pass them to each constructor. We can make that bette
 a default implementation that gets used if the caller did not give the implementation to use,
 but that is more boiler plate code we need to write for each of the hundreds of expressions.
 (And we have not even begun handling debugging, or more advanced formatting). While we did
-handle the concerns via delegation, our ArithmeticExpression is still aware of these concerns -
+handle the concerns via delegation, our `ArithmeticExpression` is still aware of these concerns -
 it has to have methods for them; albeit small.
  
 In this case, we really want a clean separation - the `ArithmeticExpression` simply should not
@@ -262,7 +279,8 @@ expression interpolation into strings. How these work will be covered in posts t
 In this post I have shown that it is desirable to separate concerns between content
 and algorithms operating on content and that it is desirable to implement content
 as anemic structures that only provides basic navigation of attributes and protection
-of their own integrity.
+of their own integrity. We want our designs to have low coupling (i.e. interchangeable parts)
+and high cohesion (concerns that are functionally focused).
 
 ### In the next Post
 

@@ -138,12 +138,12 @@ One way to model disjunct attributes is to define one type that is a union of th
     }
     
 A discriminator can also be added to avoid having to search for the one non-nil value. This
-discriminator could be a reference to the corresponding score data type (`EInteger`, `EString`, etc),
+discriminator could be a reference to the corresponding ecore data type (`EInteger`, `EString`, etc),
 but it is then difficult to handle the union type which has no `E` equivalence. Instead, the
 discriminator is a reference to its Puppet Type.
 
     class DataUnion {
-      has_one type, PAbsractType
+      has_one type, PAbstractType
       has_many_attr int, Integer
       has_many_attr str, String
       has_many_attr bool, Boolean
@@ -206,7 +206,7 @@ We could translate it to ecore like this:
 Now, we also need to update the `DataUnion` ecore type:
 
     class DataUnion {
-      has_one type, PAbsractType
+      has_one type, PAbstractType
       has_many_attr int, Integer
       has_many_attr str, String
       has_many_attr bool, Boolean
@@ -219,6 +219,70 @@ Needless to say, this creates a bit of overhead and users should be encouraged t
 explicitly define types as this is both more performant and easier to use throughout the
 system. (In contrast it may be perceived as easier to work with anonymous hashes and structs
 in puppet code)
+
+An alternative is to use different classes and our own meta model:
+
+    class RAny
+      has_one type PAbstractType
+    end
+    
+    class RInteger < RAny
+      has_attr int, Integer
+    end
+    
+    class RFloat < RAny
+      has_attr float, Float
+    end
+    
+    # etc for Boolean, and String
+
+    class RHash < RAny
+      contains_many_uni elements, RHashElement
+    end
+    
+    class RHashElement 
+      contains_one_uni key, RAny
+      contains_one_uni value, RAny
+    end
+    
+    class RArray < RAny
+      contains_many_uni elements, RAny
+    end
+    
+    class Located
+      has_one file, File     # A reference so File only appears once
+      has_attr line, Integer
+      has_attr pos, Integer  # perhaps too detailed?
+    end
+
+    class MResource
+      has_attr name, String  # e.g. 'file', 'user' etc
+      contains_many properties, MProperty
+      contains_many parameters, MParameter
+      # invariants etc
+      contains_many_uni functions, Function
+    end
+    
+    class MParameter < Located
+      has_attr name, String
+      contains_one_uni type, PAbstractType
+      contains_many_uni functions, Function
+    end
+
+    class MProperty < MParameter
+    end
+    
+    class RResource < Located
+      has_one resource_type, RResourceType
+      contains_many attributes, RAttribute
+      
+    class RAttribute 
+      has_one_uni type, RParameterType
+      contains_one_uni value, RAny
+    end
+    
+    class Edge < Located
+      has_one left_resource, 
 
 ### Simple Data Type
 
