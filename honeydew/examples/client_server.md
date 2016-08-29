@@ -6,7 +6,7 @@ type db_info = Struct[{db_name => String, db_host => String}]
 
 class three_tier_application($db_name) {
 
-  plan db_server_plan(String db_name, String host) {
+  actor db_server_actor(String db_name, String host) {
     output Db_info db_info
     action produce_information {
       new Db_info { 
@@ -26,14 +26,14 @@ class three_tier_application($db_name) {
   }
 
   define db($db_name, $db_schema) {
-    # run the plan
-    three_tier_application::db_server_plan { $title: 
+    # run the actor
+    three_tier_application::db_server_actor { $title: 
       db_name => $db_name: 
       schema  => $db_schema
     }
   }
   
-  plan db_client {
+  actor db_client {
     input Db_info db_info
   }
 }
@@ -81,7 +81,7 @@ Notify[b] -> Notify[c]
 ~~~
 Can be expressed as the honeydew program:
 ~~~
-plan catalog inherits resource_catalog {
+actor catalog inherits resource_catalog {
   resources {
     notify { 'a': }
     notify { 'a2':}
@@ -100,7 +100,7 @@ plan catalog inherits resource_catalog {
   }
 }
 
-plan standard_resource {
+actor standard_resource {
   queue  Resource     desired_state
   output Resource     actual_state
   output ResourceDiff resource_diff
@@ -124,12 +124,12 @@ plan standard_resource {
       
 }
   
-plan notify::a inherits standard_resource { 
+actor notify::a inherits standard_resource { 
   the_resource = new Notify { title => 'a' }
   queue desired { entries => the_resource}
 }
 // resource a2 is the same
-plan notify::b inherits standard_resource {
+actor notify::b inherits standard_resource {
 
   action apply  {
     !! <- notify::a.applied
@@ -139,7 +139,7 @@ plan notify::b inherits standard_resource {
 
 =====
 
-plan top_resource {
+actor top_resource {
   Resource r
   Provider p
   
@@ -149,12 +149,12 @@ plan top_resource {
   }
 }
 
-plan notify_a {
+actor notify_a {
   r = Resource.new { type => Notify, title = 'a'}
   p = provider(r)
 
   
-plan resource_catalog {
+actor resource_catalog {
   input Resource ready
   input Provider ready_to_run
   

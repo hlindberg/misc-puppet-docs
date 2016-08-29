@@ -57,6 +57,9 @@ manifests, the terminology from Petri net theory has been changed as follows:
 | transition  | Action               |
 | -           | Process              |
 
+The term `Plan` was later changed to `Actor` - this document has not been updated with that change
+in terminology. Also changed in later examples is a more puppet like syntax where all variables use a $prefix.
+
 The two main concepts are `Plan` and `Process`. A `Plan` corresponds to an executable computer 
 program, and a `Process` corresponds to an instance of an executing `Plan`.
 
