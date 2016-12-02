@@ -520,7 +520,7 @@ Would print out the `Puppet::Pops::Model::Program` before the list of what it co
 ### Polymorphic Dispatch
 
 To help with visiting only some of the objects in a tree, code can be written using the utilities used by
-the Puppet validation and evaluation known as polymorphic dispatch.
+the Puppet validation and evaluation known as [polymorphic dispatch][7].
 
 Here is an example that computes an ABC metric (Assignments, Branches and Conditionals).
 
@@ -538,7 +538,8 @@ class AbcMetric
     # A visitor shared by all instances of this class
     # It performs a polymorphic visit of the object to a method
     # named 'abc_' and the name of the class without any additional
-    # arguments.
+    # arguments. The receiver must be `nil` and given when calling
+    # `visit_this`
     #
     @@abc_visitor       ||= Puppet::Pops::Visitor.new(nil, "abc", 0, 0)
 
@@ -549,6 +550,8 @@ class AbcMetric
   end
 
   # Computes ABC metric of an AST
+  # This is the method that a user of the AbcMetric calls
+  #
   def compute_abc(target)
     target.eAllContents.each {|m|  abc(m) }
     # return the three resulting counts
@@ -557,7 +560,7 @@ class AbcMetric
 
   protected
 
-  # visit the object
+  # visit the object by using the polymorphic visitor
   def abc(o)
     # do a polymorphic visit
     @@abc_visitor.visit_this_0(self, o)
@@ -572,7 +575,7 @@ class AbcMetric
     @assignment_count += 1
   end
 
-  # Catch the differnt kinds of calls; FunctionCallExpression,
+  # Catch the different kinds of calls; FunctionCallExpression,
   # CallNamedFunctionExpression, and MethodCallExpression
   #
   def abc_CallExpression(o)
@@ -612,6 +615,12 @@ Prints `1 2 1` when executed.
 This example is only the beginning of a real ABC metric calculator. For a more comprehensive ABC metric calculation
 check out [Danzilo's Implementation][1].
 
+See [Puppet Internals - Polymorphic Dispatch][7] for more details about polymorphic dispatch.
+Note that since that article was written some additional methods have been added to optimize the performance
+of the polymorphic dispatch. Where the blog post ties the visitor to `self`, the examples here tie them to
+`nil` and instead give the receiver when calling the visitor. Also used here is the optimized method
+`call_this_0` which performs faster than just `call_this` for 0 arguments (there are variants for `_1`, `_2`, `_3` args
+as well that are also optimized).
 
 ### Validation
 
@@ -1041,5 +1050,6 @@ We can then add those to the first acceptor:
 [4]: https://github.com/puppetlabs/puppet/blob/master/lib/puppet/pops/label_provider.rb
 [5]: https://github.com/puppetlabs/puppet/blob/master/lib/puppet/pops/validation.rb
 [6]: https://gist.github.com/hlindberg/3f08f1c4d9d2b824eee003a48714edd8
+[7]: https://puppet-on-the-edge.blogspot.com.mt/2014/02/puppet-internals-polymorphic-dispatch.html
 
 
