@@ -842,10 +842,74 @@ and directly translates them into warning or errors `Diagnostics` without consid
 It is fully possible to use a more advanced diagnostician that looks at all logged things at treats them
 as symptoms and then produces additional diagnostics (or replaces the notes of symptoms with a diagnose).
 
-This is best illustrated with working code ([also in this gist][6]):
+This is best illustrated with working code ([full example in this gist][6]). All things discussed so far
+comes into play here, so you may need to refer back in this document to understand some of the
+details of what is going on.
 
-All things discussed so far comes into play here, so you may need to refer back in this document
-to understand some of the details of what is going on.
+The example code performs a validation that the bare word `bigly` is illegal.
+
+First - here is an example usage of the new validator:
+
+```
+# -- Get a parser
+parser = Puppet::Pops::Parser::EvaluatingParser.singleton
+
+# -- parse without validation
+result = parser.parser.parse_string('$x = if 1 < 2 { smaller } else { bigly }', 'testing.pp')
+result = result.model
+
+# -- validate using the default validator and get hold of the acceptor containing the result
+acceptor = parser.validate(result)
+
+# -- At this point, we have done everything `puppet parser validate` does except report the errors
+# and raise an exception if there were errors.
+
+# The acceptor may now contain errors and warnings as found by the standard puppet validation.
+# We could look at the amount of errors/warnings produced and decide it is too much already
+# or we could simply continue. Here, some feedback is printed:
+#
+puts "Standard validation errors found: #{acceptor.error_count}"
+puts "Standard validation warnings found: #{acceptor.warning_count}"
+
+# -- Validate with the 'MyValidation' that we will implement
+#
+validator = MyValidation::MyFactory.new().validator(acceptor)
+
+# Perform the validation - this adds the produced errors and warnings into the same acceptor
+# as was used for the standard validation
+#
+validator.validate(result)
+
+# -- Print some simple total statistics
+# (If we wanted to generated the extra validation separately we would have had to
+# use a separate acceptor, and then add everything in that acceptor to the main one.)
+#
+puts "Total validation errors found: #{acceptor.error_count}"
+puts "Total validation warnings found: #{acceptor.warning_count}"
+
+# -- Output the errors and warnings using a formatter that we will implement
+formatter = MyValidation::Formatter.new
+
+puts "\nErrors and warnings found:"
+acceptor.errors_and_warnings.each do |diagnostic|
+  puts formatter.format(diagnostic)
+end
+```
+
+When run, the above produces this output:
+
+```
+Standard validation errors found: 0
+Standard validation warnings found: 0
+Total validation errors found: 0
+Total validation warnings found: 1
+
+Errors and warnings found:
+testing.pp:1:27: The word 'bigly' is not a real word.
+```
+
+In this example, the added `MyValidation`, `MyFactory` and `Formatter` are built the same way
+as the standard validator in Puppet.
 
 ```
 require 'puppet'
@@ -971,64 +1035,6 @@ module MyValidation
   end
 end
 
-# -- Example usage of the new validator
-
-# Get a parser
-parser = Puppet::Pops::Parser::EvaluatingParser.singleton
-
-# parse without validation
-result = parser.parser.parse_string('$x = if 1 < 2 { smaller } else { bigly }', 'testing.pp')
-result = result.model
-
-# validate using the default validator and get hold of the acceptor containing the result
-acceptor = parser.validate(result)
-
-# -- At this point, we have done everything `puppet parser validate` does except report the errors
-# and raise an exception if there were errors.
-
-# The acceptor may now contain errors and warnings as found by the standard puppet validation.
-# We could look at the amount of errors/warnings produced and decide it is too much already
-# or we could simply continue. Here, some feedback is printed:
-#
-puts "Standard validation errors found: #{acceptor.error_count}"
-puts "Standard validation warnings found: #{acceptor.warning_count}"
-
-# Validate using the 'MyValidation' defined above
-#
-validator = MyValidation::MyFactory.new().validator(acceptor)
-
-# Perform the validation - this adds the produced errors and warnings into the same acceptor
-# as was used for the standard validation
-#
-validator.validate(result)
-
-# We can print total statistics
-# (If we wanted to generated the extra validation separately we would have had to
-# use a separate acceptor, and then add everything in that acceptor to the main one.)
-#
-puts "Total validation errors found: #{acceptor.error_count}"
-puts "Total validation warnings found: #{acceptor.warning_count}"
-
-# Output the errors and warnings using a provided simple starter formatter
-formatter = MyValidation::Formatter.new
-
-puts "\nErrors and warnings found:"
-acceptor.errors_and_warnings.each do |diagnostic|
-  puts formatter.format(diagnostic)
-end
-
-```
-
-When run, the above produces this output:
-
-```
-Standard validation errors found: 0
-Standard validation warnings found: 0
-Total validation errors found: 0
-Total validation warnings found: 1
-
-Errors and warnings found:
-testing.pp:1:27: The word 'bigly' is not a real word.
 ```
 
 ### Variations on Validation
