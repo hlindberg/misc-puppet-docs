@@ -128,6 +128,8 @@ Example - getting the source text between tokens:
 
 In general the lexer methods are much faster than the general string operations required to find things like text between tokens, positions, and offsets, and are well worth the extra code required since many puppet manifests are quite long.
 
+Read more about handling of locations in [Puppet Internals - Location Processing][8]
+
 Scanning token by token
 ---
 
@@ -1051,5 +1053,4 @@ We can then add those to the first acceptor:
 [5]: https://github.com/puppetlabs/puppet/blob/master/lib/puppet/pops/validation.rb
 [6]: https://gist.github.com/hlindberg/3f08f1c4d9d2b824eee003a48714edd8
 [7]: https://puppet-on-the-edge.blogspot.com.mt/2014/02/puppet-internals-polymorphic-dispatch.html
-
-
+[8]: https://puppet-on-the-edge.blogspot.com.mt/2014/02/puppet-internals-location-processing.html
